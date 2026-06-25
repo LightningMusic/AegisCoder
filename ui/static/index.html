@@ -1,5 +1,627 @@
 <!doctype html>
-<html>
-<head><title>AegisCoder</title></head>
-<body></body>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>AegisCoder</title>
+  <style>
+    /* ------------------------------------------------------------------ */
+    /* Reset + base                                                         */
+    /* ------------------------------------------------------------------ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #21262d;
+      --border:    #30363d;
+      --accent:    #58a6ff;
+      --accent2:   #3fb950;
+      --warn:      #d29922;
+      --danger:    #f85149;
+      --text:      #e6edf3;
+      --text-muted:#8b949e;
+      --radius:    8px;
+      --font:      'Segoe UI', system-ui, sans-serif;
+      --mono:      'Cascadia Code', 'Fira Code', monospace;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.5;
+      overflow: hidden;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Auth screen                                                          */
+    /* ------------------------------------------------------------------ */
+    #auth-screen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 24px;
+    }
+
+    .auth-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px 28px;
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .auth-card h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: var(--accent);
+      text-align: center;
+    }
+
+    .auth-card p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .auth-card input {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 1.1rem;
+      font-family: var(--mono);
+      letter-spacing: 0.1em;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .auth-card input:focus { border-color: var(--accent); }
+
+    .auth-card .btn-primary {
+      width: 100%;
+      padding: 12px;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    .auth-card .btn-primary:hover { opacity: 0.85; }
+
+    #auth-error {
+      color: var(--danger);
+      font-size: 0.85rem;
+      text-align: center;
+      min-height: 1em;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* App shell                                                            */
+    /* ------------------------------------------------------------------ */
+    #app {
+      display: none;
+      height: 100%;
+      flex-direction: column;
+    }
+
+    /* Top bar */
+    #topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #topbar h1 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--accent);
+      flex: 1;
+    }
+
+    #status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    #status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--warn);
+      transition: background 0.3s;
+    }
+
+    #status-dot.ok   { background: var(--accent2); }
+    #status-dot.err  { background: var(--danger); }
+
+    /* Project bar */
+    #projectbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    #projectbar label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    #project-path {
+      flex: 1;
+      min-width: 180px;
+      padding: 6px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      outline: none;
+    }
+
+    #project-path:focus { border-color: var(--accent); }
+
+    /* Chat area */
+    #chat-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .msg {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-width: 88%;
+    }
+
+    .msg.user { align-self: flex-end; }
+    .msg.agent { align-self: flex-start; }
+
+    .msg-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      padding: 0 4px;
+    }
+
+    .msg-bubble {
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      line-height: 1.6;
+      word-break: break-word;
+      white-space: pre-wrap;
+      font-size: 0.9rem;
+    }
+
+    .msg.user .msg-bubble {
+      background: var(--accent);
+      color: #000;
+      border-bottom-right-radius: 2px;
+    }
+
+    .msg.agent .msg-bubble {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 2px;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+    }
+
+    .msg-bubble.status { color: var(--text-muted); font-style: italic; }
+    .msg-bubble.warn   { color: var(--warn); }
+    .msg-bubble.error  { color: var(--danger); }
+    .msg-bubble.edit   { color: var(--accent2); }
+
+    /* Typing indicator */
+    #typing {
+      display: none;
+      align-self: flex-start;
+      padding: 8px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text-muted);
+      font-size: 0.82rem;
+    }
+
+    /* Input bar */
+    #inputbar {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #prompt-input {
+      flex: 1;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 0.9rem;
+      font-family: var(--font);
+      resize: none;
+      outline: none;
+      min-height: 44px;
+      max-height: 160px;
+      overflow-y: auto;
+      transition: border-color 0.15s;
+    }
+
+    #prompt-input:focus { border-color: var(--accent); }
+
+    .btn {
+      padding: 10px 18px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn:hover:not(:disabled) { opacity: 0.85; }
+
+    #btn-send { background: var(--accent); color: #000; }
+    #btn-stop { background: var(--danger); color: #fff; display: none; }
+
+    /* ------------------------------------------------------------------ */
+    /* Scrollbar                                                            */
+    /* ------------------------------------------------------------------ */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ------------------------------------------------------------------ */
+    /* Mobile tweaks                                                        */
+    /* ------------------------------------------------------------------ */
+    @media (max-width: 600px) {
+      #topbar h1 { font-size: 0.95rem; }
+      .msg { max-width: 96%; }
+      #inputbar { padding: 8px 10px; gap: 6px; }
+      .btn { padding: 10px 12px; font-size: 0.85rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- -------------------------------------------------------------------- -->
+<!-- Auth screen (shown when accessing from phone / remote)               -->
+<!-- -------------------------------------------------------------------- -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <h1>AegisCoder</h1>
+    <p>Enter your access token to connect</p>
+    <input id="token-input" type="password" placeholder="Token" autocomplete="off" autocorrect="off" spellcheck="false">
+    <div id="auth-error"></div>
+    <button class="btn-primary" onclick="submitToken()">Connect</button>
+  </div>
+</div>
+
+<!-- -------------------------------------------------------------------- -->
+<!-- Main app                                                              -->
+<!-- -------------------------------------------------------------------- -->
+<div id="app">
+
+  <div id="topbar">
+    <h1>AegisCoder</h1>
+    <div id="status-badge">
+      <div id="status-dot"></div>
+      <span id="status-text">Connecting...</span>
+    </div>
+  </div>
+
+  <div id="projectbar">
+    <label for="project-path">Project:</label>
+    <input id="project-path" type="text" placeholder="C:\Coding\Python Projects\MyProject" spellcheck="false">
+  </div>
+
+  <div id="chat-area">
+    <div id="typing">Thinking...</div>
+  </div>
+
+  <div id="inputbar">
+    <textarea id="prompt-input" rows="1" placeholder="Describe what you want to build or change..."></textarea>
+    <button id="btn-send" class="btn" onclick="sendPrompt()">Send</button>
+    <button id="btn-stop" class="btn" onclick="stopSession()">Stop</button>
+  </div>
+
+</div>
+
+<script>
+// --------------------------------------------------------------------------
+// State
+// --------------------------------------------------------------------------
+let ws = null;
+let token = sessionStorage.getItem("aegis_token") || "";
+let isLocalhost = location.hostname === "127.0.0.1" || location.hostname === "localhost";
+let currentAgentBubble = null;
+let isRunning = false;
+
+// --------------------------------------------------------------------------
+// Auth
+// --------------------------------------------------------------------------
+function init() {
+  if (isLocalhost || token) {
+    showApp();
+  }
+  // else: auth screen is visible by default
+}
+
+function submitToken() {
+  const input = document.getElementById("token-input").value.trim();
+  if (!input) {
+    document.getElementById("auth-error").textContent = "Please enter your token.";
+    return;
+  }
+  token = input;
+  // Verify the token with a quick health check before saving
+  fetch(`${apiBase()}/api/health`, { headers: authHeaders() })
+    .then(r => {
+      if (r.ok) {
+        sessionStorage.setItem("aegis_token", token);
+        document.getElementById("auth-error").textContent = "";
+        showApp();
+      } else {
+        document.getElementById("auth-error").textContent = "Invalid token. Try again.";
+        token = "";
+      }
+    })
+    .catch(() => {
+      document.getElementById("auth-error").textContent = "Could not reach the engine. Check your connection.";
+      token = "";
+    });
+}
+
+document.getElementById("token-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") submitToken();
+});
+
+function showApp() {
+  document.getElementById("auth-screen").style.display = "none";
+  document.getElementById("app").style.display = "flex";
+  connectWebSocket();
+  pollHealth();
+}
+
+// --------------------------------------------------------------------------
+// Helpers
+// --------------------------------------------------------------------------
+function apiBase() {
+  return `${location.protocol}//${location.host}`;
+}
+
+function wsBase() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  return `${proto}://${location.host}`;
+}
+
+function authHeaders() {
+  return token ? { "Authorization": `Bearer ${token}` } : {};
+}
+
+function wsUrl() {
+  const base = `${wsBase()}/ws/chat`;
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+}
+
+// --------------------------------------------------------------------------
+// Health polling
+// --------------------------------------------------------------------------
+function pollHealth() {
+  setInterval(() => {
+    fetch(`${apiBase()}/api/health`, { headers: authHeaders() })
+      .then(r => r.json())
+      .then(d => {
+        const ok = d.engine === "ok" && d.ollama === "ok";
+        const dot = document.getElementById("status-dot");
+        const txt = document.getElementById("status-text");
+        dot.className = ok ? "ok" : "err";
+        txt.textContent = ok ? "Ready" : `Ollama: ${d.ollama}`;
+      })
+      .catch(() => {
+        document.getElementById("status-dot").className = "err";
+        document.getElementById("status-text").textContent = "Engine unreachable";
+      });
+  }, 8000);
+}
+
+// --------------------------------------------------------------------------
+// WebSocket
+// --------------------------------------------------------------------------
+function connectWebSocket() {
+  if (ws) { try { ws.close(); } catch(e) {} }
+
+  ws = new WebSocket(wsUrl());
+
+  ws.onopen = () => {
+    document.getElementById("status-dot").className = "ok";
+    document.getElementById("status-text").textContent = "Ready";
+  };
+
+  ws.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    handleChunk(msg);
+  };
+
+  ws.onclose = () => {
+    document.getElementById("status-dot").className = "err";
+    document.getElementById("status-text").textContent = "Disconnected";
+    setRunning(false);
+    // Reconnect after a short delay
+    setTimeout(connectWebSocket, 3000);
+  };
+
+  ws.onerror = () => {
+    document.getElementById("status-dot").className = "err";
+  };
+}
+
+// --------------------------------------------------------------------------
+// Message handling
+// --------------------------------------------------------------------------
+function handleChunk(chunk) {
+  const { type, content } = chunk;
+
+  if (type === "done") {
+    setRunning(false);
+    currentAgentBubble = null;
+    return;
+  }
+
+  if (type === "token") {
+    // Append to the current agent bubble
+    if (!currentAgentBubble) {
+      currentAgentBubble = appendBubble("agent", "token");
+    }
+    currentAgentBubble.textContent += content;
+    scrollToBottom();
+    return;
+  }
+
+  // Status / warning / error / edit get their own distinct bubble
+  currentAgentBubble = null;
+  const bubble = appendBubble("agent", type);
+  bubble.textContent = content;
+  scrollToBottom();
+}
+
+function appendBubble(role, type) {
+  const chat = document.getElementById("chat-area");
+  const typing = document.getElementById("typing");
+
+  const wrap = document.createElement("div");
+  wrap.className = `msg ${role}`;
+
+  const label = document.createElement("div");
+  label.className = "msg-label";
+  label.textContent = role === "user" ? "You" : "AegisCoder";
+
+  const bubble = document.createElement("div");
+  bubble.className = `msg-bubble ${type !== "token" ? type : ""}`;
+
+  wrap.appendChild(label);
+  wrap.appendChild(bubble);
+  chat.insertBefore(wrap, typing);
+  return bubble;
+}
+
+function scrollToBottom() {
+  const chat = document.getElementById("chat-area");
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// --------------------------------------------------------------------------
+// Send / stop
+// --------------------------------------------------------------------------
+function sendPrompt() {
+  const promptEl = document.getElementById("prompt-input");
+  const prompt = promptEl.value.trim();
+  const projectPath = document.getElementById("project-path").value.trim();
+
+  if (!prompt) return;
+  if (!projectPath) {
+    alert("Please enter a project path first.");
+    return;
+  }
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    alert("Not connected to the engine. Please wait...");
+    return;
+  }
+
+  // Show user message
+  const bubble = appendBubble("user", "token");
+  bubble.textContent = prompt;
+  scrollToBottom();
+
+  promptEl.value = "";
+  promptEl.style.height = "auto";
+
+  setRunning(true);
+  currentAgentBubble = null;
+
+  ws.send(JSON.stringify({ prompt, project_path: projectPath }));
+}
+
+function stopSession() {
+  const projectPath = document.getElementById("project-path").value.trim();
+  if (projectPath) {
+    fetch(`${apiBase()}/api/session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ project_path: projectPath, action: "reset" }),
+    });
+  }
+  setRunning(false);
+  const bubble = appendBubble("agent", "warn");
+  bubble.textContent = "Session stopped by user.";
+  scrollToBottom();
+}
+
+function setRunning(running) {
+  isRunning = running;
+  document.getElementById("btn-send").disabled = running;
+  document.getElementById("btn-stop").style.display = running ? "inline-block" : "none";
+  document.getElementById("typing").style.display = running ? "block" : "none";
+  if (running) scrollToBottom();
+}
+
+// --------------------------------------------------------------------------
+// Auto-resize textarea
+// --------------------------------------------------------------------------
+document.getElementById("prompt-input").addEventListener("input", function() {
+  this.style.height = "auto";
+  this.style.height = Math.min(this.scrollHeight, 160) + "px";
+});
+
+document.getElementById("prompt-input").addEventListener("keydown", function(e) {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendPrompt();
+  }
+});
+
+// --------------------------------------------------------------------------
+// Boot
+// --------------------------------------------------------------------------
+init();
+</script>
+</body>
 </html>

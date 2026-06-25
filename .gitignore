@@ -1,6 +1,32 @@
+# Python
 .venv/
 __pycache__/
 *.pyc
-logs/
-data/
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Environment
 .env
+
+# Logs (gitignore the folder contents but keep the folder)
+logs/*
+!logs/.gitkeep
+
+# Local data (per-project state, history)
+data/*
+!data/.gitkeep
+!data/projects/.gitkeep
+
+# PyInstaller output
+*.spec
+*.exe
+
+# VS Code
+.vscode/
+
+# uv
+.python-version
