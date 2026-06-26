@@ -29,7 +29,7 @@ from engine.api.routes_plan import router as plan_router
 from engine.api.routes_projects import router as projects_router
 from engine.api.websocket import router as ws_router
 from engine.config import ENGINE_HOST, ENGINE_PORT, LOG_DIR, REMOTE_ACCESS_ENABLED
-from engine.middleware.auth import TokenAuthMiddleware
+from middleware.auth import TokenAuthMiddleware
 from engine.safety.process_manager import apply_self_limits
 from engine.safety.watchdog import OllamaWatchdog
 from engine.safety.runtime_budget import RuntimeBudget

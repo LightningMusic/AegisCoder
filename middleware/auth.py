@@ -1,112 +1,123 @@
 """
 AegisCoder -- token authentication middleware.
 
+Implemented as a pure ASGI middleware (no BaseHTTPMiddleware subclass,
+no starlette imports) so Pylance can fully analyze this module without
+needing starlette type stubs to be present.
+
 Design:
-  - Localhost (127.0.0.1) connections are always trusted -- no token needed.
+  - Localhost (127.0.0.1 / ::1) is always trusted -- no token needed.
     This covers the desktop pywebview app.
-  - All other connections (phone via Tailscale, another machine on LAN)
-    must supply the ACCESS_TOKEN.
+  - All other connections must supply ACCESS_TOKEN.
   - If REMOTE_ACCESS_ENABLED is False, all non-localhost connections are
     rejected outright regardless of token.
 
 Token delivery:
-  HTTP requests:   Authorization: Bearer <token>
-  WebSocket:       ws://host:port/ws/chat?token=<token>
-    (WebSocket connections cannot set custom headers in browsers, so the
-    token travels as a query parameter and is promoted to auth by this
-    middleware before the handler sees it.)
-
-The mobile frontend stores the token in sessionStorage after the user
-enters their PIN on the auth screen, and includes it automatically in
-all subsequent requests.
-
-See master plan -- mobile access section.
+  HTTP:      Authorization: Bearer <token>
+  WebSocket: ws://host/ws/chat?token=<token>
+    (browsers cannot set custom WebSocket headers, so the token travels
+    as a query parameter for WebSocket upgrades.)
 """
+import json
 import logging
-from typing import Any
-
-from fastapi import Request, WebSocket
-from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
+from typing import Any, Callable
 
 from engine.config import ACCESS_TOKEN, REMOTE_ACCESS_ENABLED
 
 log = logging.getLogger(__name__)
 
-# Routes that are always public (no token required even from remote)
 PUBLIC_PATHS = {"/", "/index.html", "/favicon.ico"}
-# Paths that start with these prefixes are also public (static assets)
 PUBLIC_PREFIXES = ("/static/", "/assets/")
 
 
-class TokenAuthMiddleware(BaseHTTPMiddleware):
+class TokenAuthMiddleware:
     """
-    ASGI middleware that enforces token auth for non-localhost connections.
+    Pure ASGI middleware -- wraps any ASGI app with token auth.
+    Compatible with FastAPI's app.add_middleware() call.
     """
 
-    def __init__(self, app: Any):
-        super().__init__(app)
+    def __init__(self, app: Any) -> None:
+        self.app = app
 
-    async def dispatch(self, request: Request, call_next):
-        client_ip = _get_client_ip(request)
+    async def __call__(
+        self, scope: dict, receive: Callable, send: Callable
+    ) -> None:
+        # Pass through non-HTTP/WS scopes (lifespan, etc.) untouched
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
 
-        # Always trust localhost
+        client = scope.get("client")
+        client_ip: str = client[0] if client else ""
+
+        # Always trust localhost -- the desktop app never needs a token
         if _is_localhost(client_ip):
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
 
-        # Remote access disabled entirely
+        # Remote access globally disabled
         if not REMOTE_ACCESS_ENABLED:
             log.warning("Remote access attempt blocked (disabled): %s", client_ip)
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "error": "Remote access is not enabled on this instance.",
-                    "detail": "Set REMOTE_ACCESS_ENABLED=true in .env to allow remote connections.",
-                },
-            )
+            await _json_response(send, 403, {
+                "error": "Remote access is not enabled.",
+                "detail": "Set REMOTE_ACCESS_ENABLED=true in .env to allow remote connections.",
+            })
+            return
 
-        # Public paths pass through (the auth/PIN page itself must be reachable)
-        path = request.url.path
+        # Public paths (the auth/PIN page itself must be reachable)
+        path: str = scope.get("path", "")
         if path in PUBLIC_PATHS or any(path.startswith(p) for p in PUBLIC_PREFIXES):
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
 
-        # WebSocket upgrade: token comes in as a query param
-        if request.headers.get("upgrade", "").lower() == "websocket":
-            token = request.query_params.get("token", "")
+        # Extract token from the right place depending on connection type
+        if scope["type"] == "websocket":
+            query = scope.get("query_string", b"").decode("utf-8", errors="replace")
+            token = _token_from_query(query)
         else:
-            # HTTP: token comes in Authorization header
-            auth_header = request.headers.get("Authorization", "")
-            token = auth_header.removeprefix("Bearer ").strip()
+            headers: dict[bytes, bytes] = dict(scope.get("headers", []))
+            auth = headers.get(b"authorization", b"").decode("utf-8", errors="replace")
+            token = auth.removeprefix("Bearer ").strip()
 
         if not _valid_token(token):
-            log.warning("Auth failure from %s (path=%s)", client_ip, path)
-            return JSONResponse(
-                status_code=401,
-                content={
-                    "error": "Invalid or missing access token.",
-                    "detail": "Include your token as: Authorization: Bearer <token>",
-                },
-            )
+            log.warning("Auth failure from %s path=%s", client_ip, path)
+            await _json_response(send, 401, {
+                "error": "Invalid or missing access token.",
+                "detail": "Supply token as: Authorization: Bearer <token>",
+            })
+            return
 
-        log.debug("Remote request authenticated: %s %s", client_ip, path)
-        return await call_next(request)
+        log.debug("Remote auth OK: %s %s", client_ip, path)
+        await self.app(scope, receive, send)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _get_client_ip(request: Request) -> str:
-    """
-    Extract the real client IP, accounting for X-Forwarded-For if present.
-    (Tailscale does not proxy, so request.client.host is correct in practice,
-    but being explicit here avoids surprises.)
-    """
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    if request.client:
-        return request.client.host
+async def _json_response(send: Callable, status: int, body: dict) -> None:
+    """Send a minimal JSON HTTP response via the raw ASGI send callable."""
+    encoded = json.dumps(body).encode("utf-8")
+    await send({
+        "type": "http.response.start",
+        "status": status,
+        "headers": [
+            [b"content-type", b"application/json"],
+            [b"content-length", str(len(encoded)).encode()],
+        ],
+    })
+    await send({
+        "type": "http.response.body",
+        "body": encoded,
+        "more_body": False,
+    })
+
+
+def _token_from_query(query: str) -> str:
+    """Extract ?token=... from a raw query string."""
+    for part in query.split("&"):
+        if part.startswith("token="):
+            return part[6:]
     return ""
 
 
@@ -116,10 +127,8 @@ def _is_localhost(ip: str) -> bool:
 
 def _valid_token(provided: str) -> bool:
     if not ACCESS_TOKEN:
-        # No token configured -- deny all remote access for safety
         log.error(
-            "ACCESS_TOKEN is not set in .env. "
-            "Remote connections cannot be authenticated. "
+            "ACCESS_TOKEN is not set in .env -- all remote connections denied. "
             "Run scripts/Setup-Remote.ps1 to generate a token."
         )
         return False
