@@ -196,6 +196,21 @@ async def chat_socket(websocket: WebSocket):
 
     except WebSocketDisconnect:
         log.info("WebSocket client disconnected")
+        # Reset any active session so the next connection is not stuck "busy"
+        if project_path:
+            try:
+                get_session(project_path).reset()
+            except Exception:
+                pass
+            try:
+                from engine.planning.executor import get as _get_ex, remove as _rem_ex
+                ex = _get_ex(project_path)
+                if ex:
+                    ex.stop()
+                    _rem_ex(project_path)
+            except Exception:
+                pass
+
     except Exception as exc:
         log.exception("Unhandled WebSocket error")
         try:

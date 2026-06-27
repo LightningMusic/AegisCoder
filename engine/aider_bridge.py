@@ -170,18 +170,37 @@ class BridgeSession:
 
         self._io = AegisIO(self._out_queue)
 
+        # Check for an existing git repo so we know whether to enable auto-commits
+        git_present = (Path(self.project_path) / ".git").exists()
+        if not git_present:
+            log.info("No .git found in %s -- git integration disabled", self.project_path)
+
         coder = Coder.create(
             main_model=model,
             io=self._io,
             # CRITICAL: always "diff", never "whole" -- see module docstring
             edit_format=EDIT_FORMAT,
-            fnames=[],              # start with no files; Aider adds via repo-map
-            use_git=True,           # initialise git in project if not present
-            auto_commits=True,      # commit every accepted edit automatically
-            stream=True,            # stream tokens as they arrive
+            fnames=[],              # start with no files
+
+            # map_tokens=0 disables the repo-map entirely.
+            # Without this, Aider uses tree-sitter to parse every file in the
+            # project folder to build context. On a large project with a slow
+            # 7B CPU model this can hang for hours before the first token arrives.
+            # We give Aider context through focused per-step prompts instead.
+            map_tokens=0,
+
+            # Only enable git integration if the project already has a repo.
+            # If use_git=True on a non-git folder, Aider tries to run git init
+            # which can fail or produce unexpected side effects.
+            use_git=git_present,
+            auto_commits=git_present,
+
+            stream=True,
         )
 
-        # Point Aider at the project directory
+        # Point Aider at the project directory.
+        # os.chdir is process-wide -- this must run in the worker thread
+        # (called from _run_prompt) so the main async event loop is unaffected.
         import os as _os
         _os.chdir(self.project_path)
 

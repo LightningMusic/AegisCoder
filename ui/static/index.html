@@ -5,364 +5,294 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>AegisCoder</title>
   <style>
-    /* ------------------------------------------------------------------ */
-    /* Reset + base                                                         */
-    /* ------------------------------------------------------------------ */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg:        #0d1117;
-      --surface:   #161b22;
-      --surface2:  #21262d;
-      --border:    #30363d;
-      --accent:    #58a6ff;
-      --accent2:   #3fb950;
-      --warn:      #d29922;
-      --danger:    #f85149;
-      --text:      #e6edf3;
-      --text-muted:#8b949e;
-      --radius:    8px;
-      --font:      'Segoe UI', system-ui, sans-serif;
-      --mono:      'Cascadia Code', 'Fira Code', monospace;
+      --bg:       #0d1117; --surface:  #161b22; --surface2: #21262d;
+      --border:   #30363d; --accent:   #58a6ff; --accent2:  #3fb950;
+      --warn:     #d29922; --danger:   #f85149; --text:     #e6edf3;
+      --muted:    #8b949e; --radius:   8px;
+      --font:     'Segoe UI', system-ui, sans-serif;
+      --mono:     'Cascadia Code', 'Fira Code', monospace;
     }
+    html,body { height:100%; background:var(--bg); color:var(--text);
+      font-family:var(--font); font-size:15px; overflow:hidden; }
 
-    html, body {
-      height: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font);
-      font-size: 15px;
-      line-height: 1.5;
-      overflow: hidden;
-    }
+    /* ---- Auth ---- */
+    #auth-screen { display:flex; align-items:center; justify-content:center;
+      height:100%; padding:24px; }
+    .auth-card { background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius); padding:32px 28px; width:100%;
+      max-width:360px; display:flex; flex-direction:column; gap:20px; }
+    .auth-card h1 { font-size:1.4rem; font-weight:700; color:var(--accent); text-align:center; }
+    .auth-card p  { font-size:.9rem; color:var(--muted); text-align:center; }
+    .auth-card input { width:100%; padding:12px 14px; background:var(--bg);
+      border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--text); font-size:1.1rem; font-family:var(--mono);
+      letter-spacing:.1em; text-align:center; outline:none; }
+    .auth-card input:focus { border-color:var(--accent); }
+    .btn-primary { width:100%; padding:12px; background:var(--accent); color:#000;
+      border:none; border-radius:var(--radius); font-size:1rem; font-weight:700;
+      cursor:pointer; }
+    #auth-error { color:var(--danger); font-size:.85rem; text-align:center; min-height:1em; }
 
-    /* ------------------------------------------------------------------ */
-    /* Auth screen                                                          */
-    /* ------------------------------------------------------------------ */
-    #auth-screen {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      padding: 24px;
-    }
+    /* ---- App shell ---- */
+    #app { display:none; height:100%; flex-direction:row; }
 
-    .auth-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 32px 28px;
-      width: 100%;
-      max-width: 360px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
+    /* ---- Sidebar ---- */
+    #sidebar { width:240px; min-width:200px; background:var(--surface);
+      border-right:1px solid var(--border); display:flex; flex-direction:column;
+      flex-shrink:0; overflow:hidden; }
+    #sidebar-header { padding:14px 16px; border-bottom:1px solid var(--border);
+      display:flex; align-items:center; gap:10px; }
+    #sidebar-header h1 { font-size:1rem; font-weight:700; color:var(--accent); flex:1; }
+    #status-dot { width:8px; height:8px; border-radius:50%; background:var(--warn);
+      transition:background .3s; flex-shrink:0; }
+    #status-dot.ok  { background:var(--accent2); }
+    #status-dot.err { background:var(--danger); }
 
-    .auth-card h1 {
-      font-size: 1.4rem;
-      font-weight: 600;
-      color: var(--accent);
-      text-align: center;
-    }
+    #projects-section { flex:1; overflow-y:auto; padding:12px 0; }
+    .section-label { font-size:.72rem; font-weight:600; color:var(--muted);
+      padding:6px 16px; text-transform:uppercase; letter-spacing:.06em; }
+    .project-item { display:flex; align-items:center; gap:8px;
+      padding:9px 16px; cursor:pointer; transition:background .12s; }
+    .project-item:hover { background:var(--surface2); }
+    .project-item.active { background:var(--surface2); border-left:3px solid var(--accent); }
+    .project-item span { font-size:.88rem; overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap; }
+    .project-item .proj-model { font-size:.72rem; color:var(--muted); }
+    #btn-add-project { margin:8px 12px; padding:8px 12px; background:var(--surface2);
+      border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--muted); font-size:.85rem; cursor:pointer; text-align:left;
+      width:calc(100% - 24px); }
+    #btn-add-project:hover { color:var(--text); }
 
-    .auth-card p {
-      font-size: 0.9rem;
-      color: var(--text-muted);
-      text-align: center;
-    }
+    /* ---- Main area ---- */
+    #main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
 
-    .auth-card input {
-      width: 100%;
-      padding: 12px 14px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      color: var(--text);
-      font-size: 1.1rem;
-      font-family: var(--mono);
-      letter-spacing: 0.1em;
-      text-align: center;
-      outline: none;
-      transition: border-color 0.15s;
-    }
+    /* Topbar */
+    #topbar { display:flex; align-items:center; gap:10px; padding:10px 16px;
+      background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0; }
+    #project-name { font-weight:600; flex:1; color:var(--text); font-size:.95rem; }
+    #project-path-display { font-size:.75rem; color:var(--muted);
+      font-family:var(--mono); overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap; max-width:300px; }
+    .mode-toggle { display:flex; gap:4px; }
+    .mode-btn { padding:5px 12px; border:1px solid var(--border);
+      border-radius:var(--radius); background:transparent; color:var(--muted);
+      font-size:.8rem; cursor:pointer; transition:all .15s; }
+    .mode-btn.active { background:var(--accent); color:#000; border-color:var(--accent);
+      font-weight:700; }
 
-    .auth-card input:focus { border-color: var(--accent); }
+    /* Plan panel */
+    #plan-panel { display:none; background:var(--surface2);
+      border-bottom:1px solid var(--border); padding:14px 16px; flex-shrink:0; }
+    #plan-panel h3 { font-size:.85rem; color:var(--muted); margin-bottom:10px;
+      text-transform:uppercase; letter-spacing:.05em; }
+    #plan-steps { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+    .plan-step { display:flex; align-items:flex-start; gap:10px;
+      padding:8px 12px; background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius); }
+    .plan-step .step-num { font-size:.75rem; color:var(--muted);
+      font-family:var(--mono); min-width:20px; padding-top:1px; }
+    .plan-step .step-desc { flex:1; font-size:.88rem; line-height:1.5; }
+    .plan-step .step-actions { display:flex; gap:6px; flex-shrink:0; }
+    .step-btn { padding:3px 10px; border:none; border-radius:4px;
+      font-size:.78rem; cursor:pointer; font-weight:600; }
+    .step-btn.approve { background:var(--accent2); color:#000; }
+    .step-btn.reject  { background:var(--danger);  color:#fff; }
+    .step-status { font-size:.75rem; padding:2px 8px; border-radius:4px;
+      font-weight:600; white-space:nowrap; }
+    .step-status.pending  { color:var(--muted); }
+    .step-status.approved { color:var(--accent2); }
+    .step-status.rejected { color:var(--danger); }
+    .step-status.running  { color:var(--warn); }
+    .step-status.done     { color:var(--accent2); }
+    .step-status.failed   { color:var(--danger); }
+    #plan-actions { display:flex; gap:8px; flex-wrap:wrap; }
 
-    .auth-card .btn-primary {
-      width: 100%;
-      padding: 12px;
-      background: var(--accent);
-      color: #000;
-      border: none;
-      border-radius: var(--radius);
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.15s;
-    }
+    /* Chat */
+    #chat-area { flex:1; overflow-y:auto; padding:16px;
+      display:flex; flex-direction:column; gap:10px; }
+    .msg { display:flex; flex-direction:column; gap:4px; max-width:88%; }
+    .msg.user  { align-self:flex-end; }
+    .msg.agent { align-self:flex-start; }
+    .msg-label { font-size:.72rem; color:var(--muted); padding:0 4px; }
+    .msg-bubble { padding:10px 14px; border-radius:var(--radius);
+      line-height:1.6; word-break:break-word; white-space:pre-wrap;
+      font-size:.9rem; }
+    .msg.user  .msg-bubble { background:var(--accent); color:#000;
+      border-bottom-right-radius:2px; }
+    .msg.agent .msg-bubble { background:var(--surface2);
+      border:1px solid var(--border); border-bottom-left-radius:2px;
+      font-family:var(--mono); font-size:.85rem; }
+    .msg-bubble.status  { color:var(--muted); font-style:italic; }
+    .msg-bubble.warning { color:var(--warn); }
+    .msg-bubble.error   { color:var(--danger); }
+    .msg-bubble.edit    { color:var(--accent2); }
+    #typing { display:none; align-self:flex-start; padding:8px 14px;
+      background:var(--surface2); border:1px solid var(--border);
+      border-radius:var(--radius); color:var(--muted); font-size:.82rem; }
 
-    .auth-card .btn-primary:hover { opacity: 0.85; }
-
-    #auth-error {
-      color: var(--danger);
-      font-size: 0.85rem;
-      text-align: center;
-      min-height: 1em;
-    }
-
-    /* ------------------------------------------------------------------ */
-    /* App shell                                                            */
-    /* ------------------------------------------------------------------ */
-    #app {
-      display: none;
-      height: 100%;
-      flex-direction: column;
-    }
-
-    /* Top bar */
-    #topbar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 16px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-
-    #topbar h1 {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--accent);
-      flex: 1;
-    }
-
-    #status-badge {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.8rem;
-      color: var(--text-muted);
-    }
-
-    #status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--warn);
-      transition: background 0.3s;
-    }
-
-    #status-dot.ok   { background: var(--accent2); }
-    #status-dot.err  { background: var(--danger); }
-
-    /* Project bar */
-    #projectbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 16px;
-      background: var(--surface2);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-      flex-wrap: wrap;
-    }
-
-    #projectbar label {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      white-space: nowrap;
-    }
-
-    #project-path {
-      flex: 1;
-      min-width: 180px;
-      padding: 6px 10px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      color: var(--text);
-      font-family: var(--mono);
-      font-size: 0.8rem;
-      outline: none;
-    }
-
-    #project-path:focus { border-color: var(--accent); }
-
-    /* Chat area */
-    #chat-area {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .msg {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      max-width: 88%;
-    }
-
-    .msg.user { align-self: flex-end; }
-    .msg.agent { align-self: flex-start; }
-
-    .msg-label {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-      padding: 0 4px;
-    }
-
-    .msg-bubble {
-      padding: 10px 14px;
-      border-radius: var(--radius);
-      line-height: 1.6;
-      word-break: break-word;
-      white-space: pre-wrap;
-      font-size: 0.9rem;
-    }
-
-    .msg.user .msg-bubble {
-      background: var(--accent);
-      color: #000;
-      border-bottom-right-radius: 2px;
-    }
-
-    .msg.agent .msg-bubble {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-bottom-left-radius: 2px;
-      font-family: var(--mono);
-      font-size: 0.85rem;
-    }
-
-    .msg-bubble.status { color: var(--text-muted); font-style: italic; }
-    .msg-bubble.warn   { color: var(--warn); }
-    .msg-bubble.error  { color: var(--danger); }
-    .msg-bubble.edit   { color: var(--accent2); }
-
-    /* Typing indicator */
-    #typing {
-      display: none;
-      align-self: flex-start;
-      padding: 8px 14px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      color: var(--text-muted);
-      font-size: 0.82rem;
-    }
+    /* Checkpoint panel */
+    #checkpoint-panel { display:none; border-top:1px solid var(--border);
+      background:var(--surface); flex-shrink:0; max-height:220px; overflow-y:auto; }
+    #checkpoint-panel h3 { font-size:.8rem; color:var(--muted); padding:10px 16px 6px;
+      text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid var(--border); }
+    .checkpoint-item { display:flex; align-items:center; gap:10px;
+      padding:8px 16px; border-bottom:1px solid var(--border); }
+    .cp-hash { font-family:var(--mono); font-size:.75rem; color:var(--accent);
+      min-width:60px; cursor:pointer; text-decoration:underline; }
+    .cp-msg  { flex:1; font-size:.82rem; overflow:hidden;
+      text-overflow:ellipsis; white-space:nowrap; }
+    .cp-files { font-size:.75rem; color:var(--muted); }
+    .cp-revert { padding:3px 10px; background:var(--surface2);
+      border:1px solid var(--border); border-radius:4px;
+      font-size:.75rem; cursor:pointer; color:var(--warn); }
+    .cp-revert:hover { background:var(--danger); color:#fff; border-color:var(--danger); }
+    #btn-toggle-checkpoints { padding:5px 12px; background:var(--surface2);
+      border:1px solid var(--border); border-radius:var(--radius);
+      font-size:.78rem; color:var(--muted); cursor:pointer; }
 
     /* Input bar */
-    #inputbar {
-      display: flex;
-      gap: 8px;
-      padding: 12px 16px;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-      flex-shrink: 0;
+    #inputbar { display:flex; gap:8px; padding:12px 16px;
+      background:var(--surface); border-top:1px solid var(--border); flex-shrink:0; }
+    #prompt-input { flex:1; padding:10px 14px; background:var(--bg);
+      border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--text); font-size:.9rem; font-family:var(--font);
+      resize:none; outline:none; min-height:44px; max-height:160px; overflow-y:auto; }
+    #prompt-input:focus { border-color:var(--accent); }
+    .btn { padding:10px 16px; border:none; border-radius:var(--radius);
+      font-size:.88rem; font-weight:700; cursor:pointer; white-space:nowrap; }
+    .btn:disabled { opacity:.45; cursor:not-allowed; }
+    #btn-send { background:var(--accent); color:#000; }
+    #btn-stop { background:var(--danger); color:#fff; display:none; }
+
+    /* Modal */
+    #modal-overlay { display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,.7); z-index:100;
+      align-items:center; justify-content:center; }
+    #modal-overlay.open { display:flex; }
+    #modal { background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius); padding:24px; width:90%; max-width:480px;
+      display:flex; flex-direction:column; gap:16px; }
+    #modal h3 { font-size:1rem; font-weight:700; }
+    #modal input { width:100%; padding:10px 12px; background:var(--bg);
+      border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--text); font-size:.9rem; outline:none; }
+    #modal input:focus { border-color:var(--accent); }
+    #modal .modal-actions { display:flex; gap:8px; justify-content:flex-end; }
+    .btn-sm { padding:7px 16px; border:none; border-radius:var(--radius);
+      font-size:.85rem; font-weight:600; cursor:pointer; }
+    .btn-cancel { background:var(--surface2); border:1px solid var(--border); color:var(--text); }
+    .btn-confirm { background:var(--accent); color:#000; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width:5px; }
+    ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+    /* Mobile */
+    @media (max-width:600px) {
+      #sidebar { display:none; }
+      #project-path-display { display:none; }
+      .msg { max-width:96%; }
     }
-
-    #prompt-input {
-      flex: 1;
-      padding: 10px 14px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      color: var(--text);
-      font-size: 0.9rem;
-      font-family: var(--font);
-      resize: none;
-      outline: none;
-      min-height: 44px;
-      max-height: 160px;
-      overflow-y: auto;
-      transition: border-color 0.15s;
-    }
-
-    #prompt-input:focus { border-color: var(--accent); }
-
-    .btn {
-      padding: 10px 18px;
-      border: none;
-      border-radius: var(--radius);
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.15s;
-      white-space: nowrap;
-    }
-
-    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-    .btn:hover:not(:disabled) { opacity: 0.85; }
-
-    #btn-send { background: var(--accent); color: #000; }
-    #btn-stop { background: var(--danger); color: #fff; display: none; }
-
-    /* ------------------------------------------------------------------ */
-    /* Scrollbar                                                            */
-    /* ------------------------------------------------------------------ */
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-    /* ------------------------------------------------------------------ */
-    /* Mobile tweaks                                                        */
-    /* ------------------------------------------------------------------ */
-    @media (max-width: 600px) {
-      #topbar h1 { font-size: 0.95rem; }
-      .msg { max-width: 96%; }
-      #inputbar { padding: 8px 10px; gap: 6px; }
-      .btn { padding: 10px 12px; font-size: 0.85rem; }
+    @media (max-width:900px) {
+      #sidebar { width:190px; }
     }
   </style>
 </head>
 <body>
 
-<!-- -------------------------------------------------------------------- -->
-<!-- Auth screen (shown when accessing from phone / remote)               -->
-<!-- -------------------------------------------------------------------- -->
+<!-- Auth -->
 <div id="auth-screen">
   <div class="auth-card">
     <h1>AegisCoder</h1>
     <p>Enter your access token to connect</p>
-    <input id="token-input" type="password" placeholder="Token" autocomplete="off" autocorrect="off" spellcheck="false">
+    <input id="token-input" type="password" placeholder="Access token" autocomplete="off" spellcheck="false">
     <div id="auth-error"></div>
     <button class="btn-primary" onclick="submitToken()">Connect</button>
   </div>
 </div>
 
-<!-- -------------------------------------------------------------------- -->
-<!-- Main app                                                              -->
-<!-- -------------------------------------------------------------------- -->
+<!-- App -->
 <div id="app">
 
-  <div id="topbar">
-    <h1>AegisCoder</h1>
-    <div id="status-badge">
-      <div id="status-dot"></div>
-      <span id="status-text">Connecting...</span>
+  <!-- Sidebar: projects -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h1>AegisCoder</h1>
+      <div id="status-dot" title="Ollama status"></div>
+    </div>
+    <div id="projects-section">
+      <div class="section-label">Projects</div>
+      <div id="project-list"></div>
+      <button id="btn-add-project" onclick="openAddProject()">+ Add project</button>
     </div>
   </div>
 
-  <div id="projectbar">
-    <label for="project-path">Project:</label>
-    <input id="project-path" type="text" placeholder="C:\Coding\Python Projects\MyProject" spellcheck="false">
-  </div>
+  <!-- Main -->
+  <div id="main">
 
-  <div id="chat-area">
-    <div id="typing">Thinking...</div>
-  </div>
+    <!-- Topbar -->
+    <div id="topbar">
+      <div style="flex:1;overflow:hidden">
+        <div id="project-name">Select a project</div>
+        <div id="project-path-display"></div>
+      </div>
+      <button id="btn-toggle-checkpoints" onclick="toggleCheckpoints()">History</button>
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="btn-chat"    onclick="setMode('chat')">Chat</button>
+        <button class="mode-btn"        id="btn-plan"    onclick="setMode('plan')">Plan</button>
+        <button class="mode-btn"        id="btn-autorun" onclick="setMode('autorun')">Auto-Run</button>
+      </div>
+    </div>
 
-  <div id="inputbar">
-    <textarea id="prompt-input" rows="1" placeholder="Describe what you want to build or change..."></textarea>
-    <button id="btn-send" class="btn" onclick="sendPrompt()">Send</button>
-    <button id="btn-stop" class="btn" onclick="stopSession()">Stop</button>
-  </div>
+    <!-- Plan panel (visible when a plan exists) -->
+    <div id="plan-panel">
+      <h3>Plan <span id="plan-id-label"></span></h3>
+      <div id="plan-steps"></div>
+      <div id="plan-actions">
+        <button class="btn" style="background:var(--accent2);color:#000"
+                onclick="approveAll()">Approve All &amp; Run</button>
+        <button class="btn" style="background:var(--surface2);border:1px solid var(--border)"
+                onclick="dismissPlan()">Dismiss</button>
+      </div>
+    </div>
 
+    <!-- Chat -->
+    <div id="chat-area">
+      <div id="typing">Thinking...</div>
+    </div>
+
+    <!-- Checkpoint timeline -->
+    <div id="checkpoint-panel">
+      <h3>Edit History (click hash to preview, Revert to undo)</h3>
+      <div id="checkpoint-list"></div>
+    </div>
+
+    <!-- Input -->
+    <div id="inputbar">
+      <textarea id="prompt-input" rows="1"
+        placeholder="Describe what you want to build or change..."></textarea>
+      <button id="btn-send" class="btn" onclick="sendPrompt()">Send</button>
+      <button id="btn-stop" class="btn" onclick="stopAll()">Stop</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add project modal -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h3>Add Project</h3>
+    <input id="modal-name" type="text" placeholder="Project name (e.g. MyApp)">
+    <input id="modal-path" type="text"
+      placeholder="Folder path (e.g. C:\Coding\Python Projects\MyApp)" spellcheck="false">
+    <div id="modal-error" style="color:var(--danger);font-size:.85rem;min-height:1em"></div>
+    <div class="modal-actions">
+      <button class="btn-sm btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-sm btn-confirm" onclick="confirmAddProject()">Add</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -371,181 +301,311 @@
 // --------------------------------------------------------------------------
 let ws = null;
 let token = sessionStorage.getItem("aegis_token") || "";
-let isLocalhost = location.hostname === "127.0.0.1" || location.hostname === "localhost";
+let isLocal = ["127.0.0.1","localhost"].includes(location.hostname);
+let currentProject = null;   // {id, name, path, model, auto_run_default}
+let currentPlan = null;
 let currentAgentBubble = null;
 let isRunning = false;
+let mode = "chat";
 
 // --------------------------------------------------------------------------
-// Auth
+// Boot
 // --------------------------------------------------------------------------
 function init() {
-  if (isLocalhost || token) {
-    showApp();
-  }
-  // else: auth screen is visible by default
+  if (isLocal || token) { showApp(); }
 }
-
-function submitToken() {
-  const input = document.getElementById("token-input").value.trim();
-  if (!input) {
-    document.getElementById("auth-error").textContent = "Please enter your token.";
-    return;
-  }
-  token = input;
-  // Verify the token with a quick health check before saving
-  fetch(`${apiBase()}/api/health`, { headers: authHeaders() })
-    .then(r => {
-      if (r.ok) {
-        sessionStorage.setItem("aegis_token", token);
-        document.getElementById("auth-error").textContent = "";
-        showApp();
-      } else {
-        document.getElementById("auth-error").textContent = "Invalid token. Try again.";
-        token = "";
-      }
-    })
-    .catch(() => {
-      document.getElementById("auth-error").textContent = "Could not reach the engine. Check your connection.";
-      token = "";
-    });
-}
-
-document.getElementById("token-input").addEventListener("keydown", e => {
-  if (e.key === "Enter") submitToken();
-});
 
 function showApp() {
   document.getElementById("auth-screen").style.display = "none";
   document.getElementById("app").style.display = "flex";
-  connectWebSocket();
+  loadProjects();
+  connectWS();
+  setInterval(pollHealth, 10000);
   pollHealth();
 }
 
 // --------------------------------------------------------------------------
-// Helpers
+// Auth
 // --------------------------------------------------------------------------
-function apiBase() {
-  return `${location.protocol}//${location.host}`;
+function submitToken() {
+  const t = document.getElementById("token-input").value.trim();
+  if (!t) { setAuthError("Please enter your token."); return; }
+  fetch(api("/health"), { headers: authH(t) })
+    .then(r => {
+      if (r.ok) {
+        token = t;
+        sessionStorage.setItem("aegis_token", token);
+        setAuthError("");
+        showApp();
+      } else { setAuthError("Invalid token."); }
+    })
+    .catch(() => setAuthError("Cannot reach engine. Check your connection."));
 }
+function setAuthError(msg) { document.getElementById("auth-error").textContent = msg; }
+document.getElementById("token-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") submitToken();
+});
 
-function wsBase() {
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  return `${proto}://${location.host}`;
-}
-
-function authHeaders() {
-  return token ? { "Authorization": `Bearer ${token}` } : {};
-}
-
+// --------------------------------------------------------------------------
+// API helpers
+// --------------------------------------------------------------------------
+function api(path) { return `${location.protocol}//${location.host}/api${path}`; }
 function wsUrl() {
-  const base = `${wsBase()}/ws/chat`;
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const base = `${proto}://${location.host}/ws/chat`;
   return token ? `${base}?token=${encodeURIComponent(token)}` : base;
 }
+function authH(t) {
+  const tok = t !== undefined ? t : token;
+  return tok ? { "Authorization": `Bearer ${tok}` } : {};
+}
+function apiFetch(path, opts={}) {
+  return fetch(api(path), {
+    ...opts,
+    headers: { "Content-Type": "application/json", ...authH(), ...(opts.headers||{}) },
+  });
+}
 
 // --------------------------------------------------------------------------
-// Health polling
+// Health
 // --------------------------------------------------------------------------
 function pollHealth() {
-  setInterval(() => {
-    fetch(`${apiBase()}/api/health`, { headers: authHeaders() })
-      .then(r => r.json())
-      .then(d => {
-        const ok = d.engine === "ok" && d.ollama === "ok";
-        const dot = document.getElementById("status-dot");
-        const txt = document.getElementById("status-text");
-        dot.className = ok ? "ok" : "err";
-        txt.textContent = ok ? "Ready" : `Ollama: ${d.ollama}`;
-      })
-      .catch(() => {
-        document.getElementById("status-dot").className = "err";
-        document.getElementById("status-text").textContent = "Engine unreachable";
-      });
-  }, 8000);
+  apiFetch("/health").then(r => r.json()).then(d => {
+    const ok = d.engine === "ok" && d.ollama === "ok";
+    const dot = document.getElementById("status-dot");
+    dot.className = ok ? "ok" : "err";
+    dot.title = ok ? "Ollama ready" : `Ollama: ${d.ollama}`;
+  }).catch(() => { document.getElementById("status-dot").className = "err"; });
+}
+
+// --------------------------------------------------------------------------
+// Projects
+// --------------------------------------------------------------------------
+function loadProjects() {
+  apiFetch("/projects").then(r => r.json()).then(d => renderProjects(d.projects||[]));
+}
+
+function renderProjects(projects) {
+  const list = document.getElementById("project-list");
+  list.innerHTML = "";
+  projects.forEach(p => {
+    const el = document.createElement("div");
+    el.className = "project-item" + (currentProject && currentProject.id===p.id ? " active" : "");
+    el.innerHTML = `<div style="flex:1;overflow:hidden">
+      <span>${esc(p.name)}</span><br>
+      <span class="proj-model">${esc(p.model)}</span>
+    </div>`;
+    el.onclick = () => openProject(p);
+    list.appendChild(el);
+  });
+}
+
+function openProject(p) {
+  currentProject = p;
+  document.getElementById("project-name").textContent = p.name;
+  document.getElementById("project-path-display").textContent = p.path;
+  dismissPlan();
+  clearCheckpoints();
+  apiFetch(`/projects/${p.id}/open`, { method: "POST" });
+  loadProjects();
+  // Load history into chat
+  loadHistory(p.id);
+}
+
+function loadHistory(projectId) {
+  document.getElementById("chat-area").innerHTML = '<div id="typing" style="display:none">Thinking...</div>';
+  currentAgentBubble = null;
+  apiFetch(`/projects/${projectId}/history`).then(r => r.json()).then(d => {
+    (d.chat || []).slice(-40).forEach(m => {
+      const bubble = appendBubble(m.role === "user" ? "user" : "agent", "token");
+      bubble.textContent = m.content;
+    });
+    scrollBottom();
+  });
+}
+
+function openAddProject() {
+  document.getElementById("modal-name").value = "";
+  document.getElementById("modal-path").value = "";
+  document.getElementById("modal-error").textContent = "";
+  document.getElementById("modal-overlay").classList.add("open");
+  document.getElementById("modal-name").focus();
+}
+function closeModal() { document.getElementById("modal-overlay").classList.remove("open"); }
+function confirmAddProject() {
+  const name = document.getElementById("modal-name").value.trim();
+  const path = document.getElementById("modal-path").value.trim();
+  if (!name || !path) { document.getElementById("modal-error").textContent = "Both fields required."; return; }
+  apiFetch("/projects", { method: "POST", body: JSON.stringify({ name, path }) })
+    .then(r => r.json()).then(d => {
+      if (d.project) { closeModal(); openProject(d.project); loadProjects(); }
+      else { document.getElementById("modal-error").textContent = d.detail || "Error."; }
+    }).catch(() => { document.getElementById("modal-error").textContent = "Failed to add project."; });
+}
+document.getElementById("modal-name").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("modal-path").focus(); });
+document.getElementById("modal-path").addEventListener("keydown", e => { if (e.key === "Enter") confirmAddProject(); });
+
+// --------------------------------------------------------------------------
+// Mode
+// --------------------------------------------------------------------------
+function setMode(m) {
+  mode = m;
+  ["chat","plan","autorun"].forEach(id => {
+    document.getElementById(`btn-${id}`).classList.toggle("active", id === m);
+  });
+  const ph = { chat: "Describe what you want...", plan: "Describe what to build (I'll make a plan for your review)...", autorun: "Describe what to build (I'll plan and run automatically)..." };
+  document.getElementById("prompt-input").placeholder = ph[m] || "";
 }
 
 // --------------------------------------------------------------------------
 // WebSocket
 // --------------------------------------------------------------------------
-function connectWebSocket() {
-  if (ws) { try { ws.close(); } catch(e) {} }
-
+function connectWS() {
+  if (ws) { try { ws.close(); } catch(e){} }
   ws = new WebSocket(wsUrl());
-
-  ws.onopen = () => {
-    document.getElementById("status-dot").className = "ok";
-    document.getElementById("status-text").textContent = "Ready";
-  };
-
-  ws.onmessage = e => {
-    const msg = JSON.parse(e.data);
-    handleChunk(msg);
-  };
-
+  ws.onopen  = () => { document.getElementById("status-dot").className = "ok"; };
+  ws.onmessage = e => handleChunk(JSON.parse(e.data));
   ws.onclose = () => {
     document.getElementById("status-dot").className = "err";
-    document.getElementById("status-text").textContent = "Disconnected";
     setRunning(false);
-    // Reconnect after a short delay
-    setTimeout(connectWebSocket, 3000);
-  };
-
-  ws.onerror = () => {
-    document.getElementById("status-dot").className = "err";
+    setTimeout(connectWS, 3000);
   };
 }
 
 // --------------------------------------------------------------------------
-// Message handling
+// Chunk handler
 // --------------------------------------------------------------------------
-function handleChunk(chunk) {
-  const { type, content } = chunk;
+function handleChunk(msg) {
+  const { type, content } = msg;
 
-  if (type === "done") {
-    setRunning(false);
+  if (type === "done") { setRunning(false); currentAgentBubble = null; return; }
+
+  if (type === "plan_ready") {
+    currentPlan = content;
+    renderPlan(content);
+    return;
+  }
+
+  if (type === "plan_status") {
+    updatePlanStatus(content);
+    return;
+  }
+
+  if (type === "step_start") {
+    markStep(content.step_id, "running");
     currentAgentBubble = null;
+    const b = appendBubble("agent", "status");
+    b.textContent = `Step ${content.step_id + 1}: ${content.description}`;
+    scrollBottom();
+    return;
+  }
+
+  if (type === "step_done") {
+    markStep(content.step_id, "done");
+    loadCheckpoints();
+    return;
+  }
+
+  if (type === "step_failed") {
+    markStep(content.step_id, "failed");
+    const b = appendBubble("agent", "error");
+    b.textContent = `Step ${content.step_id + 1} failed: ${content.error}`;
+    scrollBottom();
     return;
   }
 
   if (type === "token") {
-    // Append to the current agent bubble
-    if (!currentAgentBubble) {
-      currentAgentBubble = appendBubble("agent", "token");
-    }
+    if (!currentAgentBubble) currentAgentBubble = appendBubble("agent", "token");
     currentAgentBubble.textContent += content;
-    scrollToBottom();
+    scrollBottom();
     return;
   }
 
-  // Status / warning / error / edit get their own distinct bubble
   currentAgentBubble = null;
-  const bubble = appendBubble("agent", type);
-  bubble.textContent = content;
-  scrollToBottom();
+  const b = appendBubble("agent", type);
+  b.textContent = content;
+  scrollBottom();
 }
 
-function appendBubble(role, type) {
-  const chat = document.getElementById("chat-area");
-  const typing = document.getElementById("typing");
-
-  const wrap = document.createElement("div");
-  wrap.className = `msg ${role}`;
-
-  const label = document.createElement("div");
-  label.className = "msg-label";
-  label.textContent = role === "user" ? "You" : "AegisCoder";
-
-  const bubble = document.createElement("div");
-  bubble.className = `msg-bubble ${type !== "token" ? type : ""}`;
-
-  wrap.appendChild(label);
-  wrap.appendChild(bubble);
-  chat.insertBefore(wrap, typing);
-  return bubble;
+// --------------------------------------------------------------------------
+// Plan UI
+// --------------------------------------------------------------------------
+function renderPlan(plan) {
+  document.getElementById("plan-panel").style.display = "block";
+  document.getElementById("plan-id-label").textContent = `#${plan.id}`;
+  const container = document.getElementById("plan-steps");
+  container.innerHTML = "";
+  (plan.steps || []).forEach(s => {
+    const el = document.createElement("div");
+    el.className = "plan-step";
+    el.id = `step-${s.id}`;
+    const autoRun = plan.auto_run;
+    el.innerHTML = `
+      <span class="step-num">${s.id + 1}.</span>
+      <span class="step-desc">${esc(s.description)}</span>
+      <div class="step-actions">
+        ${autoRun
+          ? `<span class="step-status ${s.status}">${s.status}</span>`
+          : `<button class="step-btn approve" onclick="approveStep(${s.id})">Approve</button>
+             <button class="step-btn reject"  onclick="rejectStep(${s.id})">Reject</button>`
+        }
+      </div>`;
+    container.appendChild(el);
+  });
 }
 
-function scrollToBottom() {
-  const chat = document.getElementById("chat-area");
-  chat.scrollTop = chat.scrollHeight;
+function markStep(stepId, status) {
+  const el = document.getElementById(`step-${stepId}`);
+  if (!el) return;
+  const actions = el.querySelector(".step-actions");
+  if (actions) actions.innerHTML = `<span class="step-status ${status}">${status}</span>`;
+}
+
+function updatePlanStatus(content) {
+  if (content.status === "done" || content.status === "stopped") {
+    setTimeout(() => {
+      const panel = document.getElementById("plan-panel");
+      if (content.status === "done") panel.style.display = "none";
+    }, 2000);
+  }
+}
+
+function approveStep(stepId) {
+  if (!currentPlan) return;
+  apiFetch(`/plan/${currentPlan.id}/approve`, {
+    method: "POST",
+    body: JSON.stringify({ step_ids: [stepId] }),
+  }).then(r => r.json()).then(d => {
+    markStep(stepId, "approved");
+  });
+}
+
+function rejectStep(stepId) {
+  if (!currentPlan) return;
+  apiFetch(`/plan/${currentPlan.id}/reject/${stepId}`, { method: "POST" })
+    .then(() => markStep(stepId, "rejected"));
+}
+
+function approveAll() {
+  if (!currentPlan || !ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!currentProject) { alert("Select a project first."); return; }
+  // Approve all via REST then execute via WebSocket stream
+  apiFetch(`/plan/${currentPlan.id}/approve`, {
+    method: "POST",
+    body: JSON.stringify({ step_ids: [] }),
+  }).then(() => {
+    setRunning(true);
+    ws.send(JSON.stringify({
+      action: "execute",
+      plan_id: currentPlan.id,
+      project_path: currentProject.path,
+    }));
+  });
+}
+
+function dismissPlan() {
+  currentPlan = null;
+  document.getElementById("plan-panel").style.display = "none";
 }
 
 // --------------------------------------------------------------------------
@@ -554,45 +614,36 @@ function scrollToBottom() {
 function sendPrompt() {
   const promptEl = document.getElementById("prompt-input");
   const prompt = promptEl.value.trim();
-  const projectPath = document.getElementById("project-path").value.trim();
-
   if (!prompt) return;
-  if (!projectPath) {
-    alert("Please enter a project path first.");
-    return;
-  }
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    alert("Not connected to the engine. Please wait...");
-    return;
-  }
+  if (!currentProject) { alert("Please select or add a project first."); return; }
+  if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Not connected. Please wait..."); return; }
 
-  // Show user message
-  const bubble = appendBubble("user", "token");
-  bubble.textContent = prompt;
-  scrollToBottom();
+  const b = appendBubble("user", "token");
+  b.textContent = prompt;
+  scrollBottom();
+
+  // Save to history
+  apiFetch(`/projects/${currentProject.id}/history`, {
+    method: "POST",
+    body: JSON.stringify({ role: "user", content: prompt }),
+  }).catch(() => {});
 
   promptEl.value = "";
   promptEl.style.height = "auto";
-
+  dismissPlan();
   setRunning(true);
   currentAgentBubble = null;
 
-  ws.send(JSON.stringify({ prompt, project_path: projectPath }));
+  ws.send(JSON.stringify({ mode, prompt, project_path: currentProject.path }));
 }
 
-function stopSession() {
-  const projectPath = document.getElementById("project-path").value.trim();
-  if (projectPath) {
-    fetch(`${apiBase()}/api/session`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ project_path: projectPath, action: "reset" }),
-    });
-  }
+function stopAll() {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !currentProject) return;
+  ws.send(JSON.stringify({ action: "stop", project_path: currentProject.path }));
   setRunning(false);
-  const bubble = appendBubble("agent", "warn");
-  bubble.textContent = "Session stopped by user.";
-  scrollToBottom();
+  const b = appendBubble("agent", "warning");
+  b.textContent = "Stop requested.";
+  scrollBottom();
 }
 
 function setRunning(running) {
@@ -600,27 +651,113 @@ function setRunning(running) {
   document.getElementById("btn-send").disabled = running;
   document.getElementById("btn-stop").style.display = running ? "inline-block" : "none";
   document.getElementById("typing").style.display = running ? "block" : "none";
-  if (running) scrollToBottom();
+  if (running) scrollBottom();
 }
 
 // --------------------------------------------------------------------------
-// Auto-resize textarea
+// Checkpoints
 // --------------------------------------------------------------------------
-document.getElementById("prompt-input").addEventListener("input", function() {
+function toggleCheckpoints() {
+  const panel = document.getElementById("checkpoint-panel");
+  const visible = panel.style.display !== "none";
+  panel.style.display = visible ? "none" : "block";
+  if (!visible) loadCheckpoints();
+}
+
+function clearCheckpoints() {
+  document.getElementById("checkpoint-list").innerHTML = "";
+  document.getElementById("checkpoint-panel").style.display = "none";
+}
+
+function loadCheckpoints() {
+  if (!currentProject) return;
+  apiFetch(`/diff/checkpoints?project_path=${encodeURIComponent(currentProject.path)}`)
+    .then(r => r.json()).then(d => renderCheckpoints(d.checkpoints || []));
+}
+
+function renderCheckpoints(cps) {
+  const list = document.getElementById("checkpoint-list");
+  list.innerHTML = "";
+  if (!cps.length) {
+    list.innerHTML = '<div style="padding:12px 16px;color:var(--muted);font-size:.85rem">No edits yet.</div>';
+    return;
+  }
+  cps.forEach(cp => {
+    const el = document.createElement("div");
+    el.className = "checkpoint-item";
+    el.innerHTML = `
+      <span class="cp-hash" onclick="previewDiff('${cp.hash}')" title="Preview this diff">${cp.short_hash}</span>
+      <span class="cp-msg">${esc(cp.message)}</span>
+      <span class="cp-files">${(cp.files_changed||[]).length} file(s)</span>
+      <button class="cp-revert" onclick="revertCommit('${cp.hash}','${esc(cp.short_hash)}')">Revert</button>`;
+    list.appendChild(el);
+  });
+}
+
+function previewDiff(hash) {
+  if (!currentProject) return;
+  apiFetch(`/diff/preview?project_path=${encodeURIComponent(currentProject.path)}&commit_hash=${hash}`)
+    .then(r => r.json()).then(d => {
+      const b = appendBubble("agent", "token");
+      b.style.fontFamily = "var(--mono)";
+      b.style.fontSize = ".78rem";
+      b.textContent = d.diff || "(empty diff)";
+      scrollBottom();
+    });
+}
+
+function revertCommit(hash, shortHash) {
+  if (!currentProject) return;
+  if (!confirm(`Revert commit ${shortHash}? A new commit will be created to undo this change.`)) return;
+  apiFetch("/diff/revert", {
+    method: "POST",
+    body: JSON.stringify({ project_path: currentProject.path, commit_hash: hash }),
+  }).then(r => r.json()).then(d => {
+    const b = appendBubble("agent", d.ok ? "edit" : "error");
+    b.textContent = d.message || d.detail;
+    scrollBottom();
+    if (d.ok) loadCheckpoints();
+  });
+}
+
+// --------------------------------------------------------------------------
+// Chat helpers
+// --------------------------------------------------------------------------
+function appendBubble(role, type) {
+  const chat = document.getElementById("chat-area");
+  const typing = document.getElementById("typing");
+  const wrap = document.createElement("div");
+  wrap.className = `msg ${role}`;
+  const label = document.createElement("div");
+  label.className = "msg-label";
+  label.textContent = role === "user" ? "You" : "AegisCoder";
+  const bubble = document.createElement("div");
+  bubble.className = `msg-bubble ${type !== "token" ? type : ""}`;
+  wrap.appendChild(label);
+  wrap.appendChild(bubble);
+  chat.insertBefore(wrap, typing);
+  return bubble;
+}
+function scrollBottom() {
+  const c = document.getElementById("chat-area");
+  c.scrollTop = c.scrollHeight;
+}
+function esc(str) {
+  return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// --------------------------------------------------------------------------
+// Textarea auto-resize + Enter to send
+// --------------------------------------------------------------------------
+const pi = document.getElementById("prompt-input");
+pi.addEventListener("input", function() {
   this.style.height = "auto";
   this.style.height = Math.min(this.scrollHeight, 160) + "px";
 });
-
-document.getElementById("prompt-input").addEventListener("keydown", function(e) {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
-    sendPrompt();
-  }
+pi.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendPrompt(); }
 });
 
-// --------------------------------------------------------------------------
-// Boot
-// --------------------------------------------------------------------------
 init();
 </script>
 </body>

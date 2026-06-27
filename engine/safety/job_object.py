@@ -99,8 +99,16 @@ def _apply_job_object(max_memory_mb: int):
         )
 
         max_bytes = max_memory_mb * 1024 * 1024
+
+        # pywin32 312+ nests LimitFlags inside BasicLimitInformation.
+        # Older versions expose it at the top level. Handle both.
+        if "BasicLimitInformation" in info:
+            basic = info["BasicLimitInformation"]
+            basic["LimitFlags"] = basic.get("LimitFlags", 0) | win32job.JOB_OBJECT_LIMIT_PROCESS_MEMORY
+        else:
+            info["LimitFlags"] = info.get("LimitFlags", 0) | win32job.JOB_OBJECT_LIMIT_PROCESS_MEMORY
+
         info["ProcessMemoryLimit"] = max_bytes
-        info["LimitFlags"] |= win32job.JOB_OBJECT_LIMIT_PROCESS_MEMORY
 
         win32job.SetInformationJobObject(
             hJob, win32job.JobObjectExtendedLimitInformation, info
