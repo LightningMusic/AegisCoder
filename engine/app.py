@@ -170,4 +170,6 @@ def serve():
         # (pywebview shell in Phase 4) can manage lifecycle cleanly.
         # In Phase 1 / dev mode this has no effect.
         use_colors=False,
+        ws_ping_interval=20,
+        ws_ping_timeout=20,
     )

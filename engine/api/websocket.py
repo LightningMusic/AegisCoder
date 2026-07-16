@@ -81,19 +81,29 @@ async def chat_socket(websocket: WebSocket):
 
     try:
         while True:
-            data = await websocket.receive_json()
-
-            project_path = data.get("project_path", "").strip()
-            if not project_path:
-                await websocket.send_json({"type": "error", "content": "No project_path provided"})
+            try:
+                data = await websocket.receive_json()
+            except WebSocketDisconnect:
+                raise
+            except Exception as exc:
+                log.warning("Malformed WS message: %s", exc)
+                try:
+                    await websocket.send_json({"type": "error", "content": f"Bad message: {exc}"})
+                except Exception:
+                    pass
                 continue
 
-            # Record user activity for the runtime budget
-            if budget:
-                budget.record_activity()
+            try:
+                project_path = data.get("project_path", "").strip()
+                if not project_path:
+                    await websocket.send_json({"type": "error", "content": "No project_path provided"})
+                    continue
 
-            mode   = data.get("mode", "")
-            action = data.get("action", "")
+                if budget:
+                    budget.record_activity()
+
+                mode   = data.get("mode", "")
+                action = data.get("action", "")
 
             # ----------------------------------------------------------
             # JOIN -- attach to an ongoing execution or confirm session
@@ -246,23 +256,25 @@ async def chat_socket(websocket: WebSocket):
                 "content": f"Unknown mode '{mode}'. Use: chat, plan, autorun",
             })
 
-    except WebSocketDisconnect:
-        log.info("WebSocket client disconnected")
-        # Do NOT reset or stop the aider session or executor task.
-        # Just clean up this WebSocket from the active execution's listeners.
-        if project_path:
+        except WebSocketDisconnect:
+            raise
+        except Exception as exc:
+            log.exception("Error handling WS message (connection stays open)")
             try:
-                active_ex = get_active_execution(project_path)
-                if active_ex:
-                    active_ex.websockets.discard(websocket)
+                await websocket.send_json({"type": "error", "content": f"Internal error: {exc}"})
+                await websocket.send_json({"type": "done", "content": ""})
             except Exception:
                 pass
+            continue
 
-    except Exception as exc:
-        log.exception("Unhandled WebSocket error")
+except WebSocketDisconnect:
+    log.info("WebSocket client disconnected")
+    if project_path:
         try:
-            await websocket.send_json({"type": "error", "content": f"Internal error: {exc}"})
+            active_ex = get_active_execution(project_path)
+            if active_ex:
+                active_ex.websockets.discard(websocket)
         except Exception:
             pass
-    finally:
-        keepalive_task.cancel()
+finally:
+    keepalive_task.cancel()

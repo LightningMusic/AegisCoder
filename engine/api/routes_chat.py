@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from engine import ollama_manager
 from engine.aider_bridge import close_session, get_session
+from engine.aider_bridge import close_session, get_session, close_all_sessions
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -34,6 +35,9 @@ class SessionActionResponse(BaseModel):
     ok: bool
     message: str
 
+class EngineRestartResponse(BaseModel):
+    ok: bool
+    message: str
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -72,4 +76,15 @@ async def session_action(req: SessionActionRequest):
     return SessionActionResponse(
         ok=False,
         message=f"Unknown action '{req.action}'. Use 'close' or 'reset'.",
+    )
+
+@router.post("/engine/restart", response_model=EngineRestartResponse)
+async def restart_engine():
+    log.warning("Engine restart requested via UI")
+    close_all_sessions()
+    ollama_manager.stop()
+    ready = ollama_manager.ensure_running()
+    return EngineRestartResponse(
+        ok=ready,
+        message="Ollama restarted and sessions cleared" if ready else "Ollama restart failed -- check logs",
     )
