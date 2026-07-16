@@ -23,11 +23,28 @@ _plans: dict[str, Plan] = {}
 
 def store_plan(plan: Plan):
     _plans[plan.id] = plan
+    try:
+        from engine.projects import registry, state
+        proj = registry.get_by_path(plan.project_path)
+        if proj:
+            state.save_plan(proj.id, plan.to_dict())
+    except Exception as exc:
+        log.warning("Could not persist plan %s to disk: %s", plan.id, exc)
 
 
 def get_plan(plan_id: str) -> Plan:
     plan = _plans.get(plan_id)
     if not plan:
+        try:
+            from engine.projects import registry, state
+            for proj in registry.load_all():
+                for dp in state.load_plans(proj.id):
+                    if dp.get("id") == plan_id:
+                        plan = Plan.from_dict(dp)
+                        _plans[plan_id] = plan
+                        return plan
+        except Exception as exc:
+            log.warning("Could not load plan %s from disk: %s", plan_id, exc)
         raise HTTPException(status_code=404, detail=f"Plan '{plan_id}' not found")
     return plan
 
@@ -74,6 +91,7 @@ async def approve_steps(plan_id: str, req: ApproveRequest):
             approved.append(step.id)
 
     log.info("Plan %s: approved steps %s", plan_id, approved)
+    store_plan(plan)
     return {"ok": True, "approved": approved, "plan": plan.to_dict()}
 
 
@@ -85,6 +103,7 @@ async def reject_step(plan_id: str, step_id: int):
         if step.id == step_id:
             step.status = "rejected"
             log.info("Plan %s: step %d rejected", plan_id, step_id)
+            store_plan(plan)
             return {"ok": True, "plan": plan.to_dict()}
     raise HTTPException(status_code=404, detail=f"Step {step_id} not found in plan {plan_id}")
 

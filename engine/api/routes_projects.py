@@ -31,6 +31,11 @@ class UpdateProjectRequest(BaseModel):
     auto_run_default: bool | None = None
 
 
+class AddHistoryRequest(BaseModel):
+    role: str
+    content: str
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -112,6 +117,13 @@ async def get_history(project_id: str):
         "chat": state.load_chat(project_id),
         "plans": state.load_plans(project_id),
     }
+
+
+@router.post("/projects/{project_id}/history")
+async def add_history(project_id: str, req: AddHistoryRequest):
+    """Append a message to the project's chat history."""
+    state.append_chat(project_id, req.role, req.content)
+    return {"ok": True}
 
 
 @router.delete("/projects/{project_id}/history")

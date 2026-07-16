@@ -51,6 +51,31 @@ class Plan:
             auto_run=auto_run,
         )
 
+    @staticmethod
+    def from_dict(d: dict) -> "Plan":
+        steps = []
+        for s in d.get("steps", []):
+            steps.append(
+                PlanStep(
+                    id=s.get("id"),
+                    description=s.get("description"),
+                    status=s.get("status", "pending"),
+                    error=s.get("error", ""),
+                    files_changed=s.get("files_changed", []),
+                    deletion_warning=s.get("deletion_warning", False),
+                    deletion_ratio=s.get("deletion_ratio", 0.0),
+                )
+            )
+        return Plan(
+            id=d.get("id"),
+            prompt=d.get("prompt"),
+            project_path=d.get("project_path"),
+            status=d.get("status", "draft"),
+            auto_run=d.get("auto_run", False),
+            created_at=d.get("created_at", time.time()),
+            steps=steps,
+        )
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,

@@ -20,11 +20,21 @@ If the model returns malformed JSON (common with 7B models under load),
 the parser falls back to extracting a numbered list from plain text, and
 if that also fails, the entire response is treated as a single step.
 This means the plan always has at least one step regardless of model output.
+
+TIMEOUT NOTES
+  httpx.Timeout is split into connect and read phases:
+    connect  -- 10s.  If Ollama isn't up in 10s something is very wrong.
+    read     -- INFERENCE_TIMEOUT_SECONDS (default 300s).  This is the time
+                allowed for the model to finish generating its response.
+                On a CPU-only machine under load a 7B model can easily need
+                2-4 minutes for planning output.  The old flat 90s cap was
+                the primary cause of spurious "Architect timed out" errors.
+    write    -- 10s.  Sending the prompt payload is always fast.
+    pool     -- 5s.   Connection pool acquisition.
 """
 import json
 import logging
 import re
-import time
 
 import httpx
 
@@ -65,7 +75,7 @@ async def generate_plan(
     """
     Ask the Architect model to produce a plan for the given prompt.
     Returns a Plan with steps populated.
-    Raises RuntimeError if Ollama is unreachable.
+    Raises RuntimeError if Ollama is unreachable or times out.
     """
     plan = Plan.new(prompt=prompt, project_path=project_path, auto_run=auto_run)
     log.info("Architect generating plan | project=%s | prompt_len=%d", project_path, len(prompt))
@@ -96,7 +106,14 @@ async def generate_plan(
 async def _call_model(prompt: str) -> str:
     """
     Send the architect prompt to Ollama and return the raw text response.
-    Uses a short timeout -- planning should be fast.
+
+    Uses a SPLIT timeout so that:
+      - Connection to Ollama must succeed within 10s (fast fail if it's down)
+      - Model generation is allowed INFERENCE_TIMEOUT_SECONDS (default 300s)
+
+    The old flat 90s cap was the root cause of spurious timeouts on a busy
+    CPU-only machine.  A 7B model generating JSON plan output at 1-3 t/s
+    under load can easily need 2-4 minutes.
     """
     payload = {
         "model": _RAW_MODEL,
@@ -111,7 +128,20 @@ async def _call_model(prompt: str) -> str:
         },
     }
 
-    timeout = min(INFERENCE_TIMEOUT_SECONDS, 90)   # planning should not need 3 min
+    # Split timeout: connect fast-fails if Ollama is down;
+    # read gives the model the full inference budget.
+    timeout = httpx.Timeout(
+        connect=10.0,
+        read=float(INFERENCE_TIMEOUT_SECONDS),
+        write=10.0,
+        pool=5.0,
+    )
+
+    log.info(
+        "Architect calling Ollama (model=%s, read_timeout=%ds)",
+        _RAW_MODEL,
+        INFERENCE_TIMEOUT_SECONDS,
+    )
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -119,13 +149,24 @@ async def _call_model(prompt: str) -> str:
             r.raise_for_status()
             data = r.json()
             return data["message"]["content"]
-    except httpx.TimeoutException:
+    except httpx.ConnectError:
         raise RuntimeError(
-            f"Architect timed out after {timeout}s. "
+            "Cannot connect to Ollama -- is it running? "
+            "Check that ollama serve is active on 127.0.0.1:11434."
+        )
+    except httpx.ReadTimeout:
+        raise RuntimeError(
+            f"Architect timed out after {INFERENCE_TIMEOUT_SECONDS}s waiting for the model. "
+            "The system may be under heavy load. Close some applications and try again, "
+            "or increase INFERENCE_TIMEOUT_SECONDS in your .env."
+        )
+    except httpx.TimeoutException as exc:
+        raise RuntimeError(
+            f"Architect request timed out ({exc.__class__.__name__}). "
             "Ollama may be busy -- try again."
         )
     except httpx.HTTPStatusError as exc:
-        raise RuntimeError(f"Ollama returned HTTP {exc.response.status_code}")
+        raise RuntimeError(f"Ollama returned HTTP {exc.response.status_code}: {exc.response.text[:200]}")
     except Exception as exc:
         raise RuntimeError(f"Architect call failed: {exc}")
 

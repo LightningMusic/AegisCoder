@@ -410,6 +410,9 @@ function openProject(p) {
   loadProjects();
   // Load history into chat
   loadHistory(p.id);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "join", project_path: p.path }));
+  }
 }
 
 function loadHistory(projectId) {
@@ -463,7 +466,12 @@ function setMode(m) {
 function connectWS() {
   if (ws) { try { ws.close(); } catch(e){} }
   ws = new WebSocket(wsUrl());
-  ws.onopen  = () => { document.getElementById("status-dot").className = "ok"; };
+  ws.onopen  = () => {
+    document.getElementById("status-dot").className = "ok";
+    if (currentProject) {
+      ws.send(JSON.stringify({ action: "join", project_path: currentProject.path }));
+    }
+  };
   ws.onmessage = e => handleChunk(JSON.parse(e.data));
   ws.onclose = () => {
     document.getElementById("status-dot").className = "err";
@@ -477,6 +485,8 @@ function connectWS() {
 // --------------------------------------------------------------------------
 function handleChunk(msg) {
   const { type, content } = msg;
+
+  if (type === "ping") return;
 
   if (type === "done") { setRunning(false); currentAgentBubble = null; return; }
 

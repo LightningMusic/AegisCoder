@@ -36,13 +36,19 @@ Outgoing message shapes (server -> client):
   {"type": "step_failed",  "content": {...}}  -- A step failed
   {"type": "done",         "content": ""}     -- This request is fully complete
 """
+import asyncio
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from engine.aider_bridge import get_session
 from engine.planning.architect import generate_plan
-from engine.planning.executor import Executor, register as register_executor, remove as remove_executor
+from engine.planning.executor import (
+    Executor,
+    ActiveExecution,
+    get_active_execution,
+    register_active_execution,
+)
 from engine.api.routes_plan import store_plan, get_plan
 
 log = logging.getLogger(__name__)
@@ -56,6 +62,22 @@ async def chat_socket(websocket: WebSocket):
 
     # Grab the runtime budget from app state if available
     budget = getattr(websocket.app.state, "runtime_budget", None)
+
+    # Start a keepalive task to send silent pings every 20 seconds
+    async def keepalive():
+        try:
+            while True:
+                await asyncio.sleep(20)
+                await websocket.send_json({"type": "ping", "content": "keepalive"})
+        except Exception:
+            pass
+
+    keepalive_task = asyncio.create_task(keepalive())
+
+    # FIX: initialize project_path here so the except WebSocketDisconnect
+    # handler can always reference it, even if the client disconnects before
+    # sending a single message (Pylance reportPossiblyUnboundVariable).
+    project_path: str = ""
 
     try:
         while True:
@@ -74,17 +96,26 @@ async def chat_socket(websocket: WebSocket):
             action = data.get("action", "")
 
             # ----------------------------------------------------------
+            # JOIN -- attach to an ongoing execution or confirm session
+            # ----------------------------------------------------------
+            if action == "join":
+                active_ex = get_active_execution(project_path)
+                if active_ex:
+                    active_ex.websockets.add(websocket)
+                    # Replay event history so client catches up
+                    for event in active_ex.event_buffer:
+                        await websocket.send_json(event)
+                else:
+                    await websocket.send_json({"type": "status", "content": "Attached to project session"})
+                continue
+
+            # ----------------------------------------------------------
             # STOP
             # ----------------------------------------------------------
             if action == "stop":
-                ex = None
-                try:
-                    from engine.planning.executor import get as get_executor
-                    ex = get_executor(project_path)
-                except Exception:
-                    pass
-                if ex:
-                    ex.stop()
+                active_ex = get_active_execution(project_path)
+                if active_ex:
+                    active_ex.executor.stop()
                     await websocket.send_json({"type": "status", "content": "Stop signal sent"})
                 else:
                     # Also reset the aider session so a hung call unblocks
@@ -108,13 +139,18 @@ async def chat_socket(websocket: WebSocket):
                     await websocket.send_json({"type": "error", "content": str(exc)})
                     continue
 
-                executor = Executor(plan, runtime_budget=budget)
-                register_executor(project_path, executor)
-                try:
-                    async for event in executor.run():
+                active_ex = get_active_execution(project_path)
+                if active_ex:
+                    active_ex.websockets.add(websocket)
+                    for event in active_ex.event_buffer:
                         await websocket.send_json(event)
-                finally:
-                    remove_executor(project_path)
+                    continue
+
+                executor = Executor(plan, runtime_budget=budget)
+                active_ex = ActiveExecution(project_path, executor)
+                active_ex.websockets.add(websocket)
+                register_active_execution(project_path, active_ex)
+                active_ex.task = asyncio.create_task(active_ex.run())
                 continue
 
             # ----------------------------------------------------------
@@ -132,8 +168,19 @@ async def chat_socket(websocket: WebSocket):
             # ----------------------------------------------------------
             if mode == "chat" or mode == "":
                 session = get_session(project_path)
+                from engine.projects import registry, state
+                proj = registry.get_by_path(project_path)
+                if proj:
+                    state.append_chat(proj.id, "user", prompt)
+
+                response_tokens = []
                 async for chunk in session.send(prompt):
                     await websocket.send_json(chunk)
+                    if chunk.get("type") == "token":
+                        response_tokens.append(chunk.get("content", ""))
+
+                if proj and response_tokens:
+                    state.append_chat(proj.id, "agent", "".join(response_tokens))
                 continue
 
             # ----------------------------------------------------------
@@ -180,13 +227,18 @@ async def chat_socket(websocket: WebSocket):
                     "content": plan.to_dict(),
                 })
 
-                executor = Executor(plan, runtime_budget=budget)
-                register_executor(project_path, executor)
-                try:
-                    async for event in executor.run():
+                active_ex = get_active_execution(project_path)
+                if active_ex:
+                    active_ex.websockets.add(websocket)
+                    for event in active_ex.event_buffer:
                         await websocket.send_json(event)
-                finally:
-                    remove_executor(project_path)
+                    continue
+
+                executor = Executor(plan, runtime_budget=budget)
+                active_ex = ActiveExecution(project_path, executor)
+                active_ex.websockets.add(websocket)
+                register_active_execution(project_path, active_ex)
+                active_ex.task = asyncio.create_task(active_ex.run())
                 continue
 
             await websocket.send_json({
@@ -196,18 +248,13 @@ async def chat_socket(websocket: WebSocket):
 
     except WebSocketDisconnect:
         log.info("WebSocket client disconnected")
-        # Reset any active session so the next connection is not stuck "busy"
+        # Do NOT reset or stop the aider session or executor task.
+        # Just clean up this WebSocket from the active execution's listeners.
         if project_path:
             try:
-                get_session(project_path).reset()
-            except Exception:
-                pass
-            try:
-                from engine.planning.executor import get as _get_ex, remove as _rem_ex
-                ex = _get_ex(project_path)
-                if ex:
-                    ex.stop()
-                    _rem_ex(project_path)
+                active_ex = get_active_execution(project_path)
+                if active_ex:
+                    active_ex.websockets.discard(websocket)
             except Exception:
                 pass
 
@@ -217,3 +264,5 @@ async def chat_socket(websocket: WebSocket):
             await websocket.send_json({"type": "error", "content": f"Internal error: {exc}"})
         except Exception:
             pass
+    finally:
+        keepalive_task.cancel()

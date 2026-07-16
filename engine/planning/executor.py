@@ -31,6 +31,7 @@ import asyncio
 import logging
 from typing import AsyncGenerator
 
+from pathlib import Path
 from engine.aider_bridge import get_session
 from engine.planning.plan_schema import Plan, PlanStep
 from engine.safety.deletion_guard import check_diff, any_unsafe
@@ -75,13 +76,16 @@ class Executor:
         """
         Execute approved steps in order, yielding event dicts for the WebSocket.
         """
+        from engine.api.routes_plan import store_plan
         self.plan.status = "running"
+        store_plan(self.plan)
         yield _event("plan_status", {"plan_id": self.plan.id, "status": "running"})
 
         approved = [s for s in self.plan.steps if s.status == "approved"]
         if not approved:
             yield _event("error", "No approved steps to execute.")
             self.plan.status = "done"
+            store_plan(self.plan)
             yield _event("done", "")
             return
 
@@ -89,6 +93,7 @@ class Executor:
             if self._stop_requested:
                 yield _event("status", f"Stopped before step {step.id}: {step.description[:60]}")
                 step.status = "skipped"
+                store_plan(self.plan)
                 continue
 
             # Check runtime budget
@@ -109,6 +114,7 @@ class Executor:
             yield step_start_event
 
             step.status = "running"
+            store_plan(self.plan)
 
             try:
                 async for event in self._run_step(step):
@@ -116,6 +122,7 @@ class Executor:
             except Exception as exc:
                 step.status = "failed"
                 step.error = str(exc)
+                store_plan(self.plan)
                 log.exception("Step %d failed: %s", step.id, exc)
                 yield _event("step_failed", {
                     "plan_id": self.plan.id,
@@ -127,6 +134,7 @@ class Executor:
 
             if step.status != "failed":
                 step.status = "done"
+                store_plan(self.plan)
                 yield _event("step_done", {
                     "plan_id": self.plan.id,
                     "step_id": step.id,
@@ -136,6 +144,7 @@ class Executor:
         # Determine final plan status
         failed = [s for s in approved if s.status == "failed"]
         self.plan.status = "failed" if failed else "done"
+        store_plan(self.plan)
         yield _event("plan_status", {
             "plan_id": self.plan.id,
             "status": self.plan.status,
@@ -199,6 +208,80 @@ def get(project_path: str) -> "Executor | None":
 
 def remove(project_path: str):
     _executors.pop(project_path, None)
+
+
+# ---------------------------------------------------------------------------
+# ActiveExecution background run manager
+# ---------------------------------------------------------------------------
+
+class ActiveExecution:
+    """
+    Manages plan execution running in a persistent background task,
+    independent of any individual WebSocket client connection.
+    Streams events to all currently attached WebSockets and buffers them.
+    """
+
+    def __init__(self, project_path: str, executor: Executor):
+        self.project_path = str(Path(project_path).resolve())
+        self.executor = executor
+        from fastapi import WebSocket
+        self.websockets: set[WebSocket] = set()
+        self.event_buffer: list[dict] = []
+        self.task: asyncio.Task | None = None
+        self.done = False
+
+    async def run(self):
+        try:
+            async for event in self.executor.run():
+                self.event_buffer.append(event)
+                # Broadcast to all connected websockets
+                disconnected = set()
+                for ws in list(self.websockets):
+                    try:
+                        await ws.send_json(event)
+                    except Exception:
+                        disconnected.add(ws)
+                for ws in disconnected:
+                    self.websockets.discard(ws)
+        except Exception as exc:
+            log.exception("Error in active execution task")
+            err_event = {"type": "error", "content": f"Execution task error: {exc}"}
+            self.event_buffer.append(err_event)
+            for ws in list(self.websockets):
+                try:
+                    await ws.send_json(err_event)
+                except Exception:
+                    pass
+        finally:
+            self.done = True
+            # Always ensure a 'done' event completes the stream
+            if not self.event_buffer or self.event_buffer[-1].get("type") != "done":
+                done_event = {"type": "done", "content": ""}
+                self.event_buffer.append(done_event)
+                for ws in list(self.websockets):
+                    try:
+                        await ws.send_json(done_event)
+                    except Exception:
+                        pass
+            remove_active_execution(self.project_path)
+
+
+_active_executions: dict[str, ActiveExecution] = {}
+
+
+def get_active_execution(project_path: str) -> ActiveExecution | None:
+    resolved = str(Path(project_path).resolve())
+    return _active_executions.get(resolved)
+
+
+def register_active_execution(project_path: str, active_ex: ActiveExecution):
+    resolved = str(Path(project_path).resolve())
+    _active_executions[resolved] = active_ex
+
+
+def remove_active_execution(project_path: str):
+    resolved = str(Path(project_path).resolve())
+    _active_executions.pop(resolved, None)
 
 
 # ---------------------------------------------------------------------------

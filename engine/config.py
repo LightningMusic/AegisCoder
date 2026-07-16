@@ -14,6 +14,15 @@ SAFETY NOTES (see master plan section 5.2 and 5.5):
   - NUM_THREAD caps Ollama to 8 of the 12 available cores, leaving
     4 free for the OS, the Hyper-V VM, and everything else. The model
     runs slower but the system stays responsive.
+
+TIMEOUT NOTES:
+  INFERENCE_TIMEOUT_SECONDS defaults to 300 (5 minutes).
+  This is the read-phase budget for a single model call -- how long we
+  wait for Ollama to finish generating a response.
+  On a CPU-only Ryzen 5 7430U with other apps running, a 7B model
+  generating plan JSON or a code diff can easily take 2-4 minutes.
+  Set this higher in .env if you still get timeouts under heavy load.
+  The connect phase is always capped at 10s regardless of this setting.
 """
 import os
 from dotenv import load_dotenv
@@ -75,10 +84,18 @@ ACCESS_TOKEN = os.getenv("ACCESS_TOKEN", "")
 
 # ---------------------------------------------------------------------------
 # Timeouts and retry limits
-# Every inference call is killed if it exceeds INFERENCE_TIMEOUT_SECONDS.
+#
+# INFERENCE_TIMEOUT_SECONDS controls the read phase of every Ollama call --
+# how long we wait for the model to finish generating.  This is separate from
+# the connect phase (always 10s) so a slow model does not get killed just
+# because it is taking time to think.
+#
+# Default: 300s (5 min).  Increase via .env if the model is still timing out
+# under heavy system load.  The old 90s architect cap has been removed.
+#
 # No unbounded retry loops -- see master plan section 5.6.
 # ---------------------------------------------------------------------------
-INFERENCE_TIMEOUT_SECONDS = int(os.getenv("INFERENCE_TIMEOUT_SECONDS", "180"))
+INFERENCE_TIMEOUT_SECONDS = int(os.getenv("INFERENCE_TIMEOUT_SECONDS", "300"))
 OLLAMA_STARTUP_TIMEOUT_SECONDS = int(os.getenv("OLLAMA_STARTUP_TIMEOUT_SECONDS", "30"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 RETRY_BACKOFF_SECONDS = float(os.getenv("RETRY_BACKOFF_SECONDS", "5.0"))
