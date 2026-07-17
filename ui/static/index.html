@@ -221,6 +221,9 @@
   <div id="sidebar">
     <div id="sidebar-header">
       <h1>AegisCoder</h1>
+      <button id="btn-restart-engine" onclick="restartEngine()" title="Restart Ollama / clear sessions"
+        style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);
+               border-radius:6px;padding:2px 8px;font-size:.75rem;cursor:pointer">⟳</button>
       <div id="status-dot" title="Ollama status"></div>
     </div>
     <div id="projects-section">
@@ -252,6 +255,8 @@
       <h3>Plan <span id="plan-id-label"></span></h3>
       <div id="plan-steps"></div>
       <div id="plan-actions">
+        <button class="btn" style="background:var(--accent);color:#000"
+                onclick="runApprovedSteps()">Run Approved Steps</button>
         <button class="btn" style="background:var(--accent2);color:#000"
                 onclick="approveAll()">Approve All &amp; Run</button>
         <button class="btn" style="background:var(--surface2);border:1px solid var(--border)"
@@ -378,6 +383,15 @@ function pollHealth() {
   }).catch(() => { document.getElementById("status-dot").className = "err"; });
 }
 
+function restartEngine() {
+  if (!confirm("Restart Ollama and clear all sessions? In-progress work will be interrupted.")) return;
+  apiFetch("/engine/restart", { method: "POST" }).then(r => r.json()).then(d => {
+    const b = appendBubble("agent", d.ok ? "status" : "error");
+    b.textContent = d.message;
+    scrollBottom();
+    connectWS();
+  }).catch(() => alert("Could not reach the engine."));
+}
 // --------------------------------------------------------------------------
 // Projects
 // --------------------------------------------------------------------------
@@ -587,13 +601,34 @@ function approveStep(stepId) {
     body: JSON.stringify({ step_ids: [stepId] }),
   }).then(r => r.json()).then(d => {
     markStep(stepId, "approved");
+    const step = (currentPlan.steps||[]).find(s => s.id === stepId);
+    if (step) step.status = "approved";
   });
 }
 
 function rejectStep(stepId) {
   if (!currentPlan) return;
   apiFetch(`/plan/${currentPlan.id}/reject/${stepId}`, { method: "POST" })
-    .then(() => markStep(stepId, "rejected"));
+    .then(() => {
+      markStep(stepId, "rejected");
+      const step = (currentPlan.steps||[]).find(s => s.id === stepId);
+      if (step) step.status = "rejected";
+    });
+}
+
+function runApprovedSteps() {
+  if (!currentPlan || !ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!currentProject) { alert("Select a project first."); return; }
+  if (!(currentPlan.steps||[]).some(s => s.status === "approved")) {
+    alert("Approve at least one step first, or use 'Approve All & Run'.");
+    return;
+  }
+  setRunning(true);
+  ws.send(JSON.stringify({
+    action: "execute",
+    plan_id: currentPlan.id,
+    project_path: currentProject.path,
+  }));
 }
 
 function approveAll() {

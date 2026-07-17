@@ -67,9 +67,9 @@ class Plan:
                 )
             )
         return Plan(
-            id=d.get("id"),
-            prompt=d.get("prompt"),
-            project_path=d.get("project_path"),
+            id=d.get("id") or str(uuid.uuid4())[:8],
+            prompt=d.get("prompt") or "",
+            project_path=d.get("project_path") or "",
             status=d.get("status", "draft"),
             auto_run=d.get("auto_run", False),
             created_at=d.get("created_at", time.time()),
