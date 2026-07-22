@@ -113,6 +113,24 @@ class AegisIO(InputOutput):
         log.warning("[aider warning] %s", text)
         self._put(MSG_WARNING, text)
 
+    def confirm_ask(self, question, default="y", subject=None, explicit_yes_required=False, group=None, allow_never=False):
+        # Never block on stdin. yes=True should handle this, but some Aider
+        # versions/code paths can still reach here. Force a safe default
+        # answer and log it so a silent hang is visible in the logs instead.
+        log.warning("[aider confirm_ask forced] %s", question)
+        self._put(MSG_STATUS, f"[auto-confirmed] {question}")
+        return True
+
+    def prompt_ask(self, question, default="", subject=None):
+        log.warning("[aider prompt_ask forced] %s", question)
+        self._put(MSG_STATUS, f"[auto-answered] {question}")
+        return default
+
+    def get_input(self, root, rel_fnames, addable_rel_fnames, commands, abs_read_only_fnames=None, edit_format=None):
+        # Should never be called in headless mode -- if it is, we must not block.
+        log.error("[aider get_input called -- this should never happen headlessly]")
+        return ""
+
     def print(self, *msgs, **kwargs):
         text = " ".join(str(m) for m in msgs)
         self._put(MSG_TOKEN, text)
@@ -166,7 +184,11 @@ class BridgeSession:
         # Pass num_ctx as an extra_param so litellm forwards it to Ollama
         # on every API call. This is the correct way to override context length
         # for Ollama models in aider -- max_context_tokens is computed, not settable.
-        model.extra_params = {"num_ctx": NUM_CTX}
+        # timeout here is critical: without it, litellm's underlying httpx
+        # call has no read timeout and will hang forever on a wedged Ollama
+        # server, permanently occupying the single OLLAMA_NUM_PARALLEL slot
+        # and blocking every future request until Ollama is force-killed.
+        model.extra_params = {"num_ctx": NUM_CTX, "timeout": INFERENCE_TIMEOUT_SECONDS}
 
         self._io = AegisIO(self._out_queue)
 

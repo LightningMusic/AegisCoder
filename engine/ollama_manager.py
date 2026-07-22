@@ -145,3 +145,43 @@ def stop():
             log.warning("Error stopping Ollama: %s", exc)
         finally:
             _ollama_proc = None
+
+def force_kill():
+    """
+    Force-kill ALL ollama processes on the system, not just one we started
+    ourselves. Needed because ensure_running()'s health check only hits
+    /api/tags, which stays responsive even when the generation worker is
+    completely wedged -- so the soft stop()/ensure_running() cycle can
+    silently no-op forever against a hung server.
+    """
+    global _ollama_proc
+    log.warning("Force-killing all Ollama processes (hard restart)")
+    try:
+        subprocess.run(
+            ["taskkill", "/F", "/IM", "ollama.exe"],
+            capture_output=True,
+            timeout=10,
+        )
+        subprocess.run(
+            ["taskkill", "/F", "/IM", "ollama_llama_server.exe"],
+            capture_output=True,
+            timeout=10,
+        )
+    except Exception as exc:
+        log.warning("taskkill failed (may just mean nothing was running): %s", exc)
+    _ollama_proc = None
+    # Give Windows a moment to fully release the port before we relaunch
+    time.sleep(2.0)
+
+
+def hard_restart() -> bool:
+    """
+    Unconditionally kill every Ollama process, then start fresh.
+    Unlike ensure_running(), this does NOT trust the /api/tags health
+    check as proof that Ollama is actually usable -- it always kills first.
+    """
+    force_kill()
+    started = start()
+    if not started:
+        return False
+    return wait_for_ready()

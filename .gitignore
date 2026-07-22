@@ -30,3 +30,4 @@ data/*
 
 # uv
 .python-version
+.aider*

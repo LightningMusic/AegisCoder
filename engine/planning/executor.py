@@ -32,6 +32,8 @@ import logging
 from typing import AsyncGenerator
 
 from pathlib import Path
+
+from requests import session
 from engine.aider_bridge import get_session
 from engine.planning.plan_schema import Plan, PlanStep
 from engine.safety.deletion_guard import check_diff, any_unsafe
@@ -157,8 +159,9 @@ class Executor:
 
     async def _run_step(self, step: PlanStep) -> AsyncGenerator[dict, None]:
         """Run one step through Aider and yield events."""
+        import time as _time
         session = get_session(self.plan.project_path)
-
+        step_deadline = _time.monotonic() + 600  # hard 10-min ceiling per step, no matter what
         # Build a focused prompt for this step.
         # Giving Aider the full original request as context, then the
         # specific step, helps it stay on task rather than re-planning.
@@ -171,6 +174,12 @@ class Executor:
         files_mentioned = set()
 
         async for chunk in session.send(focused_prompt):
+            if _time.monotonic() > step_deadline:
+                log.error("Step %d exceeded hard 10-minute ceiling -- aborting", step.id)
+                yield {"type": "error", "content": "Step exceeded hard 10-minute safety limit and was aborted."}
+                session.reset()
+                break
+
             ctype = chunk.get("type", "")
             content = chunk.get("content", "")
 

@@ -80,11 +80,10 @@ async def session_action(req: SessionActionRequest):
 
 @router.post("/engine/restart", response_model=EngineRestartResponse)
 async def restart_engine():
-    log.warning("Engine restart requested via UI")
+    log.warning("Engine restart requested via UI (hard restart)")
     close_all_sessions()
-    ollama_manager.stop()
-    ready = ollama_manager.ensure_running()
+    ready = ollama_manager.hard_restart()
     return EngineRestartResponse(
         ok=ready,
-        message="Ollama restarted and sessions cleared" if ready else "Ollama restart failed -- check logs",
+        message="Ollama force-killed and restarted cleanly" if ready else "Ollama restart failed -- check logs",
     )

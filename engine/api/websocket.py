@@ -141,11 +141,17 @@ async def chat_socket(websocket: WebSocket):
                     active_ex = get_active_execution(project_path)
                     if active_ex:
                         active_ex.executor.stop()
-                        await websocket.send_json({"type": "status", "content": "Stop signal sent"})
-                    else:
-                        session = get_session(project_path)
-                        session.reset()
-                        await websocket.send_json({"type": "status", "content": "Session reset"})
+                        # A step already blocked inside a hung inference call
+                        # will never see the flag above. Cancel the task
+                        # outright so it actually unblocks immediately.
+                        if active_ex.task and not active_ex.task.done():
+                            active_ex.task.cancel()
+                        from engine.planning.executor import remove_active_execution
+                        remove_active_execution(project_path)
+                        await websocket.send_json({"type": "status", "content": "Execution force-stopped"})
+                    session = get_session(project_path)
+                    session.reset()
+                    await websocket.send_json({"type": "status", "content": "Session reset"})
                     await websocket.send_json({"type": "done", "content": ""})
                     continue
 
