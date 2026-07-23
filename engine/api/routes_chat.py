@@ -73,9 +73,14 @@ async def session_action(req: SessionActionRequest):
         session.reset()
         return SessionActionResponse(ok=True, message="Session reset")
 
+    if req.action == "confirm-deletion":
+        session = get_session(req.project_path)
+        session.confirm_deletion()
+        return SessionActionResponse(ok=True, message="Deletion approved")
+
     return SessionActionResponse(
         ok=False,
-        message=f"Unknown action '{req.action}'. Use 'close' or 'reset'.",
+        message=f"Unknown action '{req.action}'. Use 'close', 'reset', or 'confirm-deletion'.",
     )
 
 @router.post("/engine/restart", response_model=EngineRestartResponse)

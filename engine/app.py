@@ -94,8 +94,8 @@ def create_app() -> FastAPI:
 
     # Safety systems -- instantiated here so they share the app lifetime
     _watchdog = OllamaWatchdog(
-        is_running_fn=ollama_manager.is_running,
-        restart_fn=ollama_manager.ensure_running,
+        is_running_fn=ollama_manager.is_generation_healthy,
+        restart_fn=ollama_manager.hard_restart,
         on_down=lambda: log.warning("Ollama went down -- watchdog will attempt restart"),
         on_recovered=lambda: log.info("Ollama recovered -- watchdog confirmed"),
     )

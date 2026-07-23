@@ -538,6 +538,20 @@ function handleChunk(msg) {
     return;
   }
 
+  if (type === "deletion_warning") {
+    currentAgentBubble = null;
+    const data = content || {};
+    const b = appendBubble("agent", "warning");
+    b.textContent = data.message || "A potentially destructive edit needs confirmation.";
+    const button = document.createElement("button");
+    button.className = "btn-sm btn-confirm";
+    button.textContent = "Confirm Deletion";
+    button.onclick = () => data.plan_id ? confirmPlanDeletion(data.plan_id, data.step_id, button) : confirmChatDeletion(data.project_path, button);
+    b.appendChild(document.createElement("br"));
+    b.appendChild(button);
+    scrollBottom();
+    return;
+  }
   if (type === "token") {
     if (!currentAgentBubble) currentAgentBubble = appendBubble("agent", "token");
     currentAgentBubble.textContent += content;
@@ -552,6 +566,27 @@ function handleChunk(msg) {
 }
 
 // --------------------------------------------------------------------------
+function deletionConfirmed(button) {
+  button.disabled = true;
+  button.textContent = "Deletion Confirmed";
+  const b = appendBubble("agent", "status");
+  b.textContent = "Deletion approved; continuing.";
+  scrollBottom();
+}
+function deletionConfirmFailed(button) {
+  button.disabled = false;
+  const b = appendBubble("agent", "error");
+  b.textContent = "Could not confirm deletion.";
+  scrollBottom();
+}
+function confirmPlanDeletion(planId, stepId, button) {
+  button.disabled = true;
+  apiFetch(`/plan/${planId}/confirm-deletion/${stepId}`, { method: "POST" }).then(r => r.json()).then(d => d.ok ? deletionConfirmed(button) : deletionConfirmFailed(button)).catch(() => deletionConfirmFailed(button));
+}
+function confirmChatDeletion(projectPath, button) {
+  button.disabled = true;
+  apiFetch("/session", { method: "POST", body: JSON.stringify({ project_path: projectPath, action: "confirm-deletion" }) }).then(r => r.json()).then(d => d.ok ? deletionConfirmed(button) : deletionConfirmFailed(button)).catch(() => deletionConfirmFailed(button));
+}
 // Plan UI
 // --------------------------------------------------------------------------
 function renderPlan(plan) {

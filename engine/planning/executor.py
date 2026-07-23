@@ -65,6 +65,10 @@ class Executor:
     def stop(self):
         """Signal the executor to stop after the current step completes."""
         self._stop_requested = True
+        session = get_session(self.plan.project_path)
+        session.is_stopped = True
+        session.deletion_approved_event.set()
+        log.info("Stop requested; released deletion confirmation wait for %s", self.plan.project_path)
 
     def confirm_deletion(self):
         """
@@ -73,6 +77,7 @@ class Executor:
         """
         self._waiting_deletion_confirm = False
         self._deletion_confirm_event.set()
+        get_session(self.plan.project_path).confirm_deletion()
 
     async def run(self) -> AsyncGenerator[dict, None]:
         """
@@ -159,9 +164,11 @@ class Executor:
 
     async def _run_step(self, step: PlanStep) -> AsyncGenerator[dict, None]:
         """Run one step through Aider and yield events."""
-        import time as _time
         session = get_session(self.plan.project_path)
-        step_deadline = _time.monotonic() + 600  # hard 10-min ceiling per step, no matter what
+        session.current_plan_id = self.plan.id
+        session.current_step_id = step.id
+        # No wall-clock ceiling: active streaming may run indefinitely.
+        # BridgeSession applies only an inactivity timeout.
         # Build a focused prompt for this step.
         # Giving Aider the full original request as context, then the
         # specific step, helps it stay on task rather than re-planning.
@@ -174,12 +181,6 @@ class Executor:
         files_mentioned = set()
 
         async for chunk in session.send(focused_prompt):
-            if _time.monotonic() > step_deadline:
-                log.error("Step %d exceeded hard 10-minute ceiling -- aborting", step.id)
-                yield {"type": "error", "content": "Step exceeded hard 10-minute safety limit and was aborted."}
-                session.reset()
-                break
-
             ctype = chunk.get("type", "")
             content = chunk.get("content", "")
 

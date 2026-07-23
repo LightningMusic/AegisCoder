@@ -37,6 +37,28 @@ _ollama_proc: subprocess.Popen | None = None
 # Public API
 # ---------------------------------------------------------------------------
 
+def is_generation_healthy() -> bool:
+    """Check a real generation only when no app session is using Ollama."""
+    try:
+        # Avoid a false watchdog failure when OLLAMA_NUM_PARALLEL=1 is busy.
+        from engine.aider_bridge import get_active_generation_count
+        if get_active_generation_count() > 0:
+            log.info("Skipping deep Ollama health probe while generation is active")
+            return is_running()
+        response = httpx.post(
+            f"{OLLAMA_API_BASE}/api/generate",
+            json={"model": os.getenv("MODEL_NAME", "local-code:7b"), "prompt": "ping", "stream": False,
+                  "options": {"num_predict": 1}},
+            timeout=5.0,
+        )
+        healthy = response.status_code == 200
+        if not healthy:
+            log.warning("Deep Ollama health check returned HTTP %s", response.status_code)
+        return healthy
+    except Exception as exc:
+        log.warning("Deep Ollama health check failed: %s", exc)
+        return False
+
 def is_running() -> bool:
     """
     Returns True if the Ollama API is responding to health checks.

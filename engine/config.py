@@ -96,6 +96,8 @@ ACCESS_TOKEN = os.getenv("ACCESS_TOKEN", "")
 # No unbounded retry loops -- see master plan section 5.6.
 # ---------------------------------------------------------------------------
 INFERENCE_TIMEOUT_SECONDS = int(os.getenv("INFERENCE_TIMEOUT_SECONDS", "300"))
+# This is an inactivity limit, never a cap on total generation time.
+INFERENCE_IDLE_TIMEOUT_SECONDS = int(os.getenv("INFERENCE_IDLE_TIMEOUT_SECONDS", "120"))
 OLLAMA_STARTUP_TIMEOUT_SECONDS = int(os.getenv("OLLAMA_STARTUP_TIMEOUT_SECONDS", "30"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 RETRY_BACKOFF_SECONDS = float(os.getenv("RETRY_BACKOFF_SECONDS", "5.0"))
